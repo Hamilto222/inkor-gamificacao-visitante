@@ -1,7 +1,7 @@
 
 import { Layout } from "@/components/Layout";
 import { Card } from "@/components/ui/card";
-import { Medal, FlaskConical, HandIcon, Palette, QrCode, Droplets, ClipboardCheck, Home, Spray } from "lucide-react";
+import { Medal, FlaskConical, HandIcon, Palette, QrCode, Droplets, ClipboardCheck, Home, SprayCan } from "lucide-react";
 
 const missions = [
   {
@@ -57,7 +57,7 @@ const missions = [
     title: "Jogo dos Saneantes",
     description: "Escolha o produto de limpeza correto para cada situação.",
     points: 100,
-    icon: Spray,
+    icon: SprayCan,
     status: "available"
   }
 ];
