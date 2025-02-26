@@ -14,8 +14,8 @@ import {
 const menuItems = [
   { title: "Início", icon: Home, url: "/" },
   { title: "Mapa da Fábrica", icon: Map, url: "/mapa" },
+  { title: "Missões", icon: Medal, url: "/missoes" },
   { title: "Scanner QR", icon: QrCode, url: "/scanner" },
-  { title: "Conquistas", icon: Medal, url: "/conquistas" },
   { title: "Ranking", icon: Trophy, url: "/ranking" },
   { title: "Loja de Prêmios", icon: Store, url: "/loja" },
 ];
@@ -45,4 +45,3 @@ export function AppSidebar() {
     </Sidebar>
   );
 }
-
