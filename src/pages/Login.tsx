@@ -103,21 +103,12 @@ const Login = () => {
     }
     
     if (!existingUser) {
-      users.push({
-        matricula,
-        senha,
-        role: "user",
-        nome: "",
-        ativo: true
-      });
-      localStorage.setItem("users", JSON.stringify(users));
-      
       toast({
-        title: "Cadastro realizado",
-        description: "Sua senha foi cadastrada com sucesso. Você já pode fazer login.",
+        title: "Matrícula inválida",
+        description: "Esta matrícula não está cadastrada no sistema. Contate um administrador.",
+        variant: "destructive",
       });
-      
-      setIsFirstAccess(false);
+      return;
     } else {
       existingUser.senha = senha;
       localStorage.setItem("users", JSON.stringify(users));

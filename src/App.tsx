@@ -14,6 +14,7 @@ import Login from "./pages/Login";
 import Admin from "./pages/Admin";
 import Scanner from "./pages/Scanner";
 import Ranking from "./pages/Ranking";
+import { AuthGuard } from "./components/AuthGuard";
 
 const queryClient = new QueryClient();
 
@@ -40,7 +41,7 @@ const App = () => {
         matricula: "admin",
         nome: "Administrador",
         role: "admin",
-        senha: "admin",
+        senha: "123",
         ativo: true,
       };
       localStorage.setItem("users", JSON.stringify([defaultAdmin]));
@@ -61,14 +62,14 @@ const App = () => {
             {/* Public routes */}
             <Route path="/login" element={<Login />} />
             
-            {/* Protected routes - will be handled by AuthGuard component */}
-            <Route path="/" element={<Index />} />
-            <Route path="/mapa" element={<FactoryMap />} />
-            <Route path="/loja" element={<Store />} />
-            <Route path="/missoes" element={<Missions />} />
-            <Route path="/scanner" element={<Scanner />} />
-            <Route path="/ranking" element={<Ranking />} />
-            <Route path="/admin" element={<Admin />} />
+            {/* Protected routes */}
+            <Route path="/" element={<AuthGuard><Index /></AuthGuard>} />
+            <Route path="/mapa" element={<AuthGuard><FactoryMap /></AuthGuard>} />
+            <Route path="/loja" element={<AuthGuard><Store /></AuthGuard>} />
+            <Route path="/missoes" element={<AuthGuard><Missions /></AuthGuard>} />
+            <Route path="/scanner" element={<AuthGuard><Scanner /></AuthGuard>} />
+            <Route path="/ranking" element={<AuthGuard><Ranking /></AuthGuard>} />
+            <Route path="/admin" element={<Admin />} /> {/* AuthGuard is already in Admin component with role restriction */}
             
             {/* Fallback */}
             <Route path="*" element={<NotFound />} />

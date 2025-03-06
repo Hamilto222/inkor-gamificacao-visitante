@@ -1,5 +1,5 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 
@@ -11,6 +11,7 @@ interface AuthGuardProps {
 export const AuthGuard = ({ children, allowedRoles = [] }: AuthGuardProps) => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [authorized, setAuthorized] = useState(false);
   
   useEffect(() => {
     const currentUserStr = localStorage.getItem('currentUser');
@@ -37,9 +38,12 @@ export const AuthGuard = ({ children, allowedRoles = [] }: AuthGuardProps) => {
           variant: "destructive",
         });
         navigate('/');
+        return;
       }
     }
+    
+    setAuthorized(true);
   }, [navigate, toast, allowedRoles]);
   
-  return <>{children}</>;
+  return authorized ? <>{children}</> : null;
 };
