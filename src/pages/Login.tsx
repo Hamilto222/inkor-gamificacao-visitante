@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,29 @@ const Login = () => {
   const [isFirstAccess, setIsFirstAccess] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  // Initialize the admin user when the component mounts
+  useEffect(() => {
+    const users = JSON.parse(localStorage.getItem("users") || "[]");
+    
+    // Check if admin user already exists
+    const adminExists = users.some((user: any) => user.matricula === "admin");
+    
+    if (!adminExists) {
+      // Create the admin user with password "123"
+      const adminUser = {
+        matricula: "admin",
+        nome: "Administrador",
+        role: "admin",
+        senha: "123",
+        ativo: true,
+      };
+      
+      users.push(adminUser);
+      localStorage.setItem("users", JSON.stringify(users));
+      console.log("Admin user created with password '123'");
+    }
+  }, []);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
