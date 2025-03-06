@@ -28,7 +28,7 @@ const Admin = () => {
   const [newUser, setNewUser] = useState<User>({
     matricula: "",
     nome: "",
-    role: "user",
+    role: "user", // Fixed: Explicitly using the union type
     ativo: true,
   });
   const [searchTerm, setSearchTerm] = useState("");
@@ -43,7 +43,7 @@ const Admin = () => {
       setUsers(JSON.parse(storedUsers));
     } else {
       // Initialize with a default admin if no users exist
-      const defaultAdmin = {
+      const defaultAdmin: User = {
         matricula: "admin",
         nome: "Administrador",
         role: "admin",
