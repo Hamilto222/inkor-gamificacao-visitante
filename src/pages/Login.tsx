@@ -19,32 +19,41 @@ const Login = () => {
 
   // Initialize the admin user when the component mounts
   useEffect(() => {
-    const users = JSON.parse(localStorage.getItem("users") || "[]");
-    
-    // Check if admin user already exists
-    const adminExists = users.some((user: any) => user.matricula === "admin");
-    
-    if (!adminExists) {
-      // Create the admin user with password "123"
-      const adminUser = {
-        matricula: "admin",
-        nome: "Administrador",
-        role: "admin",
-        senha: "123",
-        ativo: true,
-      };
+    // Garantir que o localStorage esteja disponível (ambiente browser)
+    if (typeof window !== "undefined") {
+      const users = JSON.parse(localStorage.getItem("users") || "[]");
       
-      users.push(adminUser);
-      localStorage.setItem("users", JSON.stringify(users));
-      console.log("Admin user created with password '123'");
+      // Check if admin user already exists
+      const adminExists = users.some((user: any) => user.matricula === "admin");
+      
+      if (!adminExists) {
+        // Create the admin user with password "123"
+        const adminUser = {
+          matricula: "admin",
+          nome: "Administrador",
+          role: "admin",
+          senha: "123",
+          ativo: true,
+        };
+        
+        users.push(adminUser);
+        localStorage.setItem("users", JSON.stringify(users));
+        console.log("Admin user created with password '123'");
+      } else {
+        console.log("Admin user already exists");
+      }
     }
   }, []);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     
+    console.log("Tentando login com:", matricula, senha);
+    
     // Simulate authentication (replace with actual authentication logic)
     const users = JSON.parse(localStorage.getItem("users") || "[]");
+    console.log("Usuários cadastrados:", users);
+    
     const user = users.find((u: any) => u.matricula === matricula && u.senha === senha);
     
     if (user) {

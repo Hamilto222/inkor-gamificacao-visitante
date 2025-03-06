@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,7 +27,7 @@ const Admin = () => {
   const [newUser, setNewUser] = useState<User>({
     matricula: "",
     nome: "",
-    role: "user", // Fixed: Explicitly using the union type
+    role: "user",
     ativo: true,
   });
   const [searchTerm, setSearchTerm] = useState("");
@@ -47,7 +46,7 @@ const Admin = () => {
         matricula: "admin",
         nome: "Administrador",
         role: "admin",
-        senha: "admin",
+        senha: "123",
         ativo: true,
       };
       localStorage.setItem("users", JSON.stringify([defaultAdmin]));
