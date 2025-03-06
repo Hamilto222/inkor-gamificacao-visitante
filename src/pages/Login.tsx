@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,17 +16,13 @@ const Login = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  // Initialize the admin user when the component mounts
   useEffect(() => {
-    // Garantir que o localStorage esteja disponível (ambiente browser)
     if (typeof window !== "undefined") {
       const users = JSON.parse(localStorage.getItem("users") || "[]");
       
-      // Check if admin user already exists
       const adminExists = users.some((user: any) => user.matricula === "admin");
       
       if (!adminExists) {
-        // Create the admin user with password "123"
         const adminUser = {
           matricula: "admin",
           nome: "Administrador",
@@ -40,7 +35,14 @@ const Login = () => {
         localStorage.setItem("users", JSON.stringify(users));
         console.log("Admin user created with password '123'");
       } else {
-        console.log("Admin user already exists");
+        const updatedUsers = users.map((user: any) => {
+          if (user.matricula === "admin") {
+            return { ...user, senha: "123" };
+          }
+          return user;
+        });
+        localStorage.setItem("users", JSON.stringify(updatedUsers));
+        console.log("Admin user password updated to '123'");
       }
     }
   }, []);
@@ -50,7 +52,6 @@ const Login = () => {
     
     console.log("Tentando login com:", matricula, senha);
     
-    // Simulate authentication (replace with actual authentication logic)
     const users = JSON.parse(localStorage.getItem("users") || "[]");
     console.log("Usuários cadastrados:", users);
     
@@ -63,7 +64,6 @@ const Login = () => {
         description: `Bem-vindo, ${user.nome || matricula}!`,
       });
       
-      // Redirect based on user role
       if (user.role === "admin") {
         navigate("/admin");
       } else {
@@ -103,12 +103,11 @@ const Login = () => {
     }
     
     if (!existingUser) {
-      // Create a new user if one doesn't exist in the system
       users.push({
         matricula,
         senha,
-        role: "user", // Default role
-        nome: "", // Will be set by admin later
+        role: "user",
+        nome: "",
         ativo: true
       });
       localStorage.setItem("users", JSON.stringify(users));
@@ -120,7 +119,6 @@ const Login = () => {
       
       setIsFirstAccess(false);
     } else {
-      // Update existing user's password
       existingUser.senha = senha;
       localStorage.setItem("users", JSON.stringify(users));
       

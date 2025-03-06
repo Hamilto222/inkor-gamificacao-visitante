@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -46,7 +47,7 @@ const Admin = () => {
         matricula: "admin",
         nome: "Administrador",
         role: "admin",
-        senha: "123",
+        senha: "123", // Make sure this matches what's in Login.tsx
         ativo: true,
       };
       localStorage.setItem("users", JSON.stringify([defaultAdmin]));
