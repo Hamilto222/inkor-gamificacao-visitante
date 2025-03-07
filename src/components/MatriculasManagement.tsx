@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Search, UserPlus } from "lucide-react";
+import { Plus, Search, FileInput, UserPlus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface Matricula {
@@ -67,26 +67,6 @@ export const MatriculasManagement = () => {
     }
 
     try {
-      setIsLoading(true);
-      
-      // Verificar se a matrícula já existe
-      const { data: existingData, error: checkError } = await supabase
-        .from('matriculas_funcionarios')
-        .select('numero_matricula')
-        .eq('numero_matricula', newMatricula.numero_matricula);
-      
-      if (checkError) throw checkError;
-      
-      if (existingData && existingData.length > 0) {
-        toast({
-          title: "Matrícula já existe",
-          description: "Esta matrícula já está cadastrada no sistema.",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      // Inserir nova matrícula
       const { data, error } = await supabase
         .from('matriculas_funcionarios')
         .insert([
@@ -128,8 +108,6 @@ export const MatriculasManagement = () => {
         description: error.message,
         variant: "destructive",
       });
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -204,9 +182,9 @@ export const MatriculasManagement = () => {
             </div>
             
             <DialogFooter>
-              <Button variant="outline" onClick={() => setOpenDialog(false)} disabled={isLoading}>Cancelar</Button>
-              <Button onClick={handleAddMatricula} disabled={isLoading || !newMatricula.numero_matricula || !newMatricula.nome}>
-                {isLoading ? "Salvando..." : "Confirmar"}
+              <Button variant="outline" onClick={() => setOpenDialog(false)}>Cancelar</Button>
+              <Button onClick={handleAddMatricula}>
+                Confirmar
               </Button>
             </DialogFooter>
           </DialogContent>

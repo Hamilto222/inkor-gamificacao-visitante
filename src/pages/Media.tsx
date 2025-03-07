@@ -3,10 +3,9 @@ import React, { useState, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileVideo, Image, Film, FileText, Download, Loader2, Maximize2 } from "lucide-react";
+import { FileVideo, Image, Film, FileText, Download, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface MediaFile {
   id: string;
@@ -14,15 +13,11 @@ interface MediaFile {
   type: string;
   url: string;
   created_at: string;
-  title: string;
-  description: string;
 }
 
 const Media = () => {
   const [files, setFiles] = useState<MediaFile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedFile, setSelectedFile] = useState<MediaFile | null>(null);
-  const [openPreviewDialog, setOpenPreviewDialog] = useState(false);
 
   useEffect(() => {
     loadMediaFiles();
@@ -43,22 +38,13 @@ const Media = () => {
             const { data: urlData } = await supabase.storage
               .from('media-files')
               .createSignedUrl(file.name, 3600); // URL válida por 1 hora
-            
-            // Tentar obter os metadados do arquivo (título e descrição)
-            const { data: metaData, error: metaError } = await supabase
-              .from('media_metadata')
-              .select('*')
-              .eq('filename', file.name)
-              .single();
               
             return {
               id: file.id,
               name: file.name,
               type: getFileType(file.name),
               url: urlData?.signedUrl || '',
-              created_at: file.created_at,
-              title: metaData?.title || file.name,
-              description: metaData?.description || ''
+              created_at: file.created_at
             };
           })
         );
@@ -101,27 +87,19 @@ const Media = () => {
     const link = document.createElement('a');
     link.href = url;
     link.download = fileName;
-    link.target = "_blank";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  const handleOpenPreview = (file: MediaFile) => {
-    setSelectedFile(file);
-    setOpenPreviewDialog(true);
-  };
-
-  const renderFilePreview = (file: MediaFile, fullSize: boolean = false) => {
-    const containerClass = fullSize ? "w-full h-auto max-h-[70vh]" : "rounded-md object-cover w-full h-full";
-    
+  const renderFilePreview = (file: MediaFile) => {
     if (file.type === 'image') {
       return (
         <AspectRatio ratio={16 / 9}>
           <img 
             src={file.url} 
-            alt={file.title} 
-            className={containerClass}
+            alt={file.name} 
+            className="rounded-md object-cover w-full h-full"
           />
         </AspectRatio>
       );
@@ -131,7 +109,7 @@ const Media = () => {
           <video 
             src={file.url} 
             controls 
-            className={containerClass}
+            className="rounded-md w-full h-full"
           />
         </AspectRatio>
       );
@@ -174,34 +152,22 @@ const Media = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {files.map((file) => (
                   <Card key={file.id} className="overflow-hidden">
-                    <div className="p-2 cursor-pointer" onClick={() => handleOpenPreview(file)}>
+                    <div className="p-2">
                       {renderFilePreview(file)}
                     </div>
                     <CardContent className="p-3">
                       <div className="flex items-center space-x-2">
                         {getFileIcon(file.type)}
-                        <p className="text-sm font-medium truncate flex-1">{file.title}</p>
+                        <p className="text-sm font-medium truncate flex-1">{file.name}</p>
                       </div>
-                      <div className="flex items-center justify-between mt-2">
+                      <div className="flex items-center justify-end mt-2">
                         <Button 
                           variant="outline" 
                           size="sm" 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDownloadFile(file.url, file.name);
-                          }}
+                          onClick={() => handleDownloadFile(file.url, file.name)}
                         >
                           <Download className="h-4 w-4 mr-1" />
                           Baixar
-                        </Button>
-                        
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleOpenPreview(file)}
-                        >
-                          <Maximize2 className="h-4 w-4 mr-1" />
-                          Visualizar
                         </Button>
                       </div>
                     </CardContent>
@@ -216,42 +182,6 @@ const Media = () => {
             )}
           </CardContent>
         </Card>
-
-        <Dialog open={openPreviewDialog} onOpenChange={setOpenPreviewDialog}>
-          <DialogContent className="sm:max-w-[800px]">
-            {selectedFile && (
-              <>
-                <DialogHeader>
-                  <DialogTitle>{selectedFile.title}</DialogTitle>
-                  {selectedFile.description && (
-                    <DialogDescription>
-                      {selectedFile.description}
-                    </DialogDescription>
-                  )}
-                </DialogHeader>
-                
-                <div className="py-4">
-                  <div className="mb-4">
-                    {renderFilePreview(selectedFile, true)}
-                  </div>
-                </div>
-                
-                <DialogFooter>
-                  <Button 
-                    variant="outline" 
-                    onClick={() => handleDownloadFile(selectedFile.url, selectedFile.name)}
-                  >
-                    <Download className="mr-2 h-4 w-4" />
-                    Baixar
-                  </Button>
-                  <Button variant="default" onClick={() => setOpenPreviewDialog(false)}>
-                    Fechar
-                  </Button>
-                </DialogFooter>
-              </>
-            )}
-          </DialogContent>
-        </Dialog>
       </div>
     </Layout>
   );

@@ -22,7 +22,6 @@ const missions = [
     points: 100,
     icon: FlaskConical,
     status: "available",
-    type: "question", // Added type field to distinguish question from activity missions
     example: {
       question: "Qual desses ingredientes é essencial para a fabricação da argamassa?",
       options: [
@@ -34,23 +33,19 @@ const missions = [
     }
   },
   {
-    id: "maos-na-massa",
     title: "Mãos na Massa!",
     description: "Misture corretamente um pequeno lote de argamassa ou rejunte e aplique em uma peça de teste.",
     detailedDescription: "O visitante deve misturar corretamente um pequeno lote de argamassa ou rejunte (com supervisão) e aplicá-lo em uma peça de teste. Ganha pontos extras se acertar a proporção correta e espalhar de maneira uniforme.",
     points: 200,
     icon: HandIcon,
-    type: "activity", // This is an activity mission that requires evidence
     status: "available"
   },
   {
-    id: "qual-e-essa-cor",
     title: "Qual é essa cor?",
     description: "Identifique as cores corretas do catálogo de tintas da Inkor.",
     detailedDescription: "O visitante vê uma amostra de cor e precisa acertar o nome correto dentro do catálogo de tintas da empresa.",
     points: 150,
     icon: Palette,
-    type: "question",
     status: "available",
     example: {
       question: "Qual é o nome dessa cor no catálogo da Inkor?",
@@ -63,24 +58,20 @@ const missions = [
     }
   },
   {
-    id: "caca-ao-qr-code",
     title: "Caça ao QR Code",
     description: "Encontre e escaneie os QR Codes espalhados pela fábrica para desbloquear curiosidades.",
     detailedDescription: "Espalhe QR Codes em locais estratégicos da fábrica. Ao escaneá-los, os visitantes desbloqueiam curiosidades sobre os processos e ganham pontos.",
     points: 300,
     icon: QrCode,
-    type: "activity",
     status: "available",
     funFact: "Você sabia? A impermeabilização de superfícies pode aumentar a durabilidade das construções em até 50%!"
   },
   {
-    id: "desafio-impermeabilizante",
     title: "Desafio do Impermeabilizante",
     description: "Compare superfícies com e sem impermeabilização e identifique as diferenças.",
     detailedDescription: "O visitante observa duas superfícies expostas à água – uma com impermeabilizante e outra sem. Ele precisa identificar corretamente qual foi tratada e explicar por que.",
     points: 150,
     icon: Droplets,
-    type: "question",
     status: "available",
     example: {
       question: "Qual dessas superfícies recebeu impermeabilização?",
@@ -91,13 +82,11 @@ const missions = [
     }
   },
   {
-    id: "producao-com-qualidade",
     title: "Como Produzimos com Qualidade?",
     description: "Teste seus conhecimentos sobre os processos de produção da fábrica.",
     detailedDescription: "Quiz sobre os processos de controle de qualidade da fábrica.",
     points: 200,
     icon: ClipboardCheck,
-    type: "question",
     status: "available",
     example: {
       question: "O que é feito para garantir que uma tinta tenha a tonalidade correta antes de ser embalada?",
@@ -110,13 +99,11 @@ const missions = [
     }
   },
   {
-    id: "protegendo-construcao",
     title: "Protegendo a Construção!",
     description: "Resolva casos práticos escolhendo os produtos Inkor mais adequados.",
     detailedDescription: "O visitante recebe um caso fictício: 'Uma casa apresenta infiltrações constantes. Qual produto da Inkor pode resolver esse problema?'",
     points: 250,
     icon: Home,
-    type: "question",
     status: "available",
     example: {
       question: "Uma casa apresenta infiltrações constantes. Qual produto da Inkor pode resolver esse problema?",
@@ -129,13 +116,11 @@ const missions = [
     }
   },
   {
-    id: "jogo-saneantes",
     title: "Jogo dos Saneantes",
     description: "Escolha o produto de limpeza correto para cada situação.",
     detailedDescription: "O visitante recebe descrições de situações de limpeza e deve escolher o saneante correto para cada caso.",
     points: 100,
     icon: SprayCan,
-    type: "question",
     status: "available",
     example: {
       question: "Qual produto é mais indicado para remover mofo de superfícies internas?",
@@ -160,7 +145,6 @@ const Missions = () => {
   const [userMatricula, setUserMatricula] = useState<string>("");
   const [userPoints, setUserPoints] = useState<number>(0);
   const [activeTab, setActiveTab] = useState<string>("available");
-  const [evidenceRequired, setEvidenceRequired] = useState<boolean>(false);
 
   useEffect(() => {
     // Carregar matrícula do usuário atual
@@ -196,25 +180,16 @@ const Missions = () => {
 
   const loadUserPoints = async (matricula: string) => {
     try {
-      // Verificar se já existe registro para o usuário
       const { data, error } = await supabase
         .from('pontos_usuarios')
         .select('total_pontos')
-        .eq('matricula', matricula);
+        .eq('matricula', matricula)
+        .single();
       
       if (error) throw error;
       
-      if (data && data.length > 0) {
-        setUserPoints(data[0].total_pontos);
-      } else {
-        // Se não existir, criar um registro com 0 pontos
-        const { error: insertError } = await supabase
-          .from('pontos_usuarios')
-          .insert([{ matricula: matricula, total_pontos: 0 }]);
-        
-        if (insertError) throw insertError;
-        
-        setUserPoints(0);
+      if (data) {
+        setUserPoints(data.total_pontos);
       }
     } catch (error: any) {
       console.error("Erro ao carregar pontos do usuário:", error.message);
@@ -238,26 +213,6 @@ const Missions = () => {
   const handleCompleteMission = async () => {
     if (!selectedMission) return;
     
-    // Verificar se evidência é obrigatória
-    if (evidenceRequired && !evidenceImage) {
-      toast({
-        title: "Evidência necessária",
-        description: "Para esta missão, é necessário enviar uma foto como evidência.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    // Verificar se resposta foi fornecida
-    if (!answer) {
-      toast({
-        title: "Resposta necessária",
-        description: "Por favor, forneça uma resposta para a missão.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
     try {
       let evidenceUrl = null;
       
@@ -265,7 +220,7 @@ const Missions = () => {
       if (evidenceImage) {
         const filename = `${Date.now()}-${evidenceImage.name}`;
         const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('media-files')
+          .from('mission-evidences')
           .upload(filename, evidenceImage);
         
         if (uploadError) throw uploadError;
@@ -273,17 +228,6 @@ const Missions = () => {
         if (uploadData) {
           evidenceUrl = uploadData.path;
         }
-      }
-      
-      // Verificar se o usuário existe na tabela de matrículas
-      const { data: matriculaData, error: matriculaError } = await supabase
-        .from('matriculas_funcionarios')
-        .select('numero_matricula')
-        .eq('numero_matricula', userMatricula)
-        .single();
-      
-      if (matriculaError) {
-        throw new Error("Matrícula não encontrada no sistema. Por favor, contate o administrador.");
       }
       
       // Registrar conclusão da missão
@@ -301,37 +245,23 @@ const Missions = () => {
       
       if (missionError) throw missionError;
       
-      // Verificar se o usuário já tem pontos
+      // Atualizar pontos do usuário
       const { data: pointsData, error: pointsError } = await supabase
         .from('pontos_usuarios')
         .select('total_pontos')
-        .eq('matricula', userMatricula);
+        .eq('matricula', userMatricula)
+        .single();
       
       if (pointsError) throw pointsError;
       
-      let newTotalPoints = selectedMission.points;
+      const newTotalPoints = (pointsData?.total_pontos || 0) + selectedMission.points;
       
-      if (pointsData && pointsData.length > 0) {
-        newTotalPoints = (pointsData[0].total_pontos || 0) + selectedMission.points;
-        
-        // Atualizar pontos do usuário
-        const { error: updateError } = await supabase
-          .from('pontos_usuarios')
-          .update({ total_pontos: newTotalPoints })
-          .eq('matricula', userMatricula);
-        
-        if (updateError) throw updateError;
-      } else {
-        // Criar novo registro de pontos
-        const { error: insertError } = await supabase
-          .from('pontos_usuarios')
-          .insert([{ 
-            matricula: userMatricula, 
-            total_pontos: selectedMission.points 
-          }]);
-        
-        if (insertError) throw insertError;
-      }
+      const { error: updateError } = await supabase
+        .from('pontos_usuarios')
+        .update({ total_pontos: newTotalPoints })
+        .eq('matricula', userMatricula);
+      
+      if (updateError) throw updateError;
       
       // Atualizar estados
       setUserPoints(newTotalPoints);
@@ -358,7 +288,6 @@ const Missions = () => {
 
   const handleStartMission = (mission: any) => {
     setSelectedMission(mission);
-    setEvidenceRequired(mission.type === "activity");
     setOpenDialog(true);
   };
 
@@ -547,7 +476,7 @@ const Missions = () => {
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
                   <Camera className="h-4 w-4" />
-                  {evidenceRequired ? "Evidência (obrigatória)" : "Evidência (opcional)"}
+                  Evidência (opcional)
                 </Label>
                 <div className="grid gap-4">
                   <Input
@@ -555,7 +484,6 @@ const Missions = () => {
                     type="file"
                     accept="image/*"
                     onChange={handleImageChange}
-                    required={evidenceRequired}
                   />
                   
                   {evidenceBase64 && (
@@ -576,7 +504,7 @@ const Missions = () => {
               <Button variant="outline" onClick={() => setOpenDialog(false)}>Cancelar</Button>
               <Button 
                 onClick={handleCompleteMission}
-                disabled={!answer || (evidenceRequired && !evidenceImage)}
+                disabled={!answer}
               >
                 <Upload className="mr-2 h-4 w-4" />
                 Completar Missão

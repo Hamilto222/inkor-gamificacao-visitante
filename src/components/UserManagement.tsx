@@ -10,7 +10,6 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, Search } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 
 interface User {
   id?: string;
@@ -31,10 +30,7 @@ export const UserManagement = () => {
   });
   const [searchTerm, setSearchTerm] = useState("");
   const [openDialog, setOpenDialog] = useState(false);
-  const [matriculaExists, setMatriculaExists] = useState(false);
-  const [matriculaName, setMatriculaName] = useState("");
-  const [isChecking, setIsChecking] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [matriculaExists, setMatriculaExists] = useState(true);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -47,46 +43,14 @@ export const UserManagement = () => {
 
   // Validate matricula when it changes
   useEffect(() => {
-    const checkMatricula = async () => {
-      if (newUser.matricula) {
-        setIsChecking(true);
-        try {
-          // Verificar na tabela de matrículas se a matrícula existe
-          const { data, error } = await supabase
-            .from('matriculas_funcionarios')
-            .select('nome, numero_matricula')
-            .eq('numero_matricula', newUser.matricula)
-            .single();
-          
-          if (error) {
-            console.error("Erro ao verificar matrícula:", error);
-            setMatriculaExists(false);
-            setMatriculaName("");
-          } else if (data) {
-            setMatriculaExists(true);
-            setMatriculaName(data.nome);
-            
-            // Atualizar o nome do novo usuário com o nome da matrícula
-            setNewUser(prev => ({
-              ...prev,
-              nome: data.nome
-            }));
-          }
-        } catch (error) {
-          console.error("Erro ao verificar matrícula:", error);
-          setMatriculaExists(false);
-          setMatriculaName("");
-        } finally {
-          setIsChecking(false);
-        }
-      } else {
-        setMatriculaExists(false);
-        setMatriculaName("");
-      }
-    };
-    
-    checkMatricula();
-  }, [newUser.matricula]);
+    if (newUser.matricula) {
+      // Check if the matricula exists in the users array
+      const userExists = users.some(user => user.matricula === newUser.matricula);
+      setMatriculaExists(userExists);
+    } else {
+      setMatriculaExists(true); // Reset if empty
+    }
+  }, [newUser.matricula, users]);
 
   const handleAddUser = () => {
     if (!newUser.matricula || !newUser.nome) {
@@ -98,8 +62,9 @@ export const UserManagement = () => {
       return;
     }
 
-    // Check if matricula exists in system
-    if (!matriculaExists) {
+    // Check if matricula already exists
+    const userExists = users.some(user => user.matricula === newUser.matricula);
+    if (!userExists) {
       toast({
         title: "Matrícula inválida",
         description: "Esta matrícula não está cadastrada no sistema.",
@@ -135,21 +100,11 @@ export const UserManagement = () => {
       return user;
     });
     
-    // Ou adicionar um novo usuário se não existir
-    if (!users.some(user => user.matricula === newUser.matricula)) {
-      updatedUsers.push({
-        matricula: newUser.matricula,
-        nome: newUser.nome,
-        role: newUser.role,
-        ativo: true
-      });
-    }
-    
     setUsers(updatedUsers);
     localStorage.setItem("users", JSON.stringify(updatedUsers));
     
     toast({
-      title: "Usuário configurado",
+      title: "Usuário atualizado",
       description: `O usuário ${newUser.nome} foi configurado com sucesso.`,
     });
     
@@ -232,22 +187,11 @@ export const UserManagement = () => {
                   value={newUser.matricula}
                   onChange={(e) => setNewUser({...newUser, matricula: e.target.value})}
                   placeholder="Digite a matrícula existente"
-                  className={matriculaExists === false && newUser.matricula ? "border-red-500" : ""}
-                  disabled={isChecking}
+                  className={!matriculaExists && newUser.matricula ? "border-red-500" : ""}
                 />
-                {isChecking && (
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Verificando matrícula...
-                  </p>
-                )}
-                {!matriculaExists && newUser.matricula && !isChecking && (
+                {!matriculaExists && newUser.matricula && (
                   <p className="text-sm text-red-500 mt-1">
                     Matrícula não encontrada no sistema
-                  </p>
-                )}
-                {matriculaExists && newUser.matricula && !isChecking && (
-                  <p className="text-sm text-green-500 mt-1">
-                    Matrícula encontrada: {matriculaName}
                   </p>
                 )}
               </div>
@@ -259,13 +203,7 @@ export const UserManagement = () => {
                   value={newUser.nome}
                   onChange={(e) => setNewUser({...newUser, nome: e.target.value})}
                   placeholder="Digite o nome completo"
-                  disabled={matriculaExists} // Desabilitar edição do nome se a matrícula for encontrada
                 />
-                {matriculaExists && (
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Nome preenchido automaticamente da matrícula
-                  </p>
-                )}
               </div>
               
               <div className="space-y-2">
@@ -291,7 +229,7 @@ export const UserManagement = () => {
               <Button variant="outline" onClick={() => setOpenDialog(false)}>Cancelar</Button>
               <Button 
                 onClick={handleAddUser}
-                disabled={!matriculaExists || isChecking}
+                disabled={!matriculaExists}
               >
                 Confirmar
               </Button>
