@@ -19,7 +19,7 @@ interface MediaFile {
   url: string;
   created_at: string;
   title: string;
-  description: string | null;
+  description: string;
 }
 
 export const MediaManagement = () => {
@@ -150,7 +150,7 @@ export const MediaManagement = () => {
       // Set initial progress
       setUploadProgress(10);
       
-      // Upload file
+      // Upload without onUploadProgress since it's not supported in the FileOptions type
       const { error } = await supabase.storage
         .from('media-files')
         .upload(fileName, newMedia.file, {

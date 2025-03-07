@@ -15,7 +15,7 @@ interface MediaFile {
   url: string;
   created_at: string;
   title: string;
-  description: string | null;
+  description: string;
 }
 
 const Media = () => {
