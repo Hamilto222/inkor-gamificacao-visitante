@@ -14,6 +14,8 @@ import Login from "./pages/Login";
 import Admin from "./pages/Admin";
 import Scanner from "./pages/Scanner";
 import Ranking from "./pages/Ranking";
+import Products from "./pages/Products";
+import Media from "./pages/Media";
 import { AuthGuard } from "./components/AuthGuard";
 
 const queryClient = new QueryClient();
@@ -69,6 +71,8 @@ const App = () => {
             <Route path="/missoes" element={<AuthGuard><Missions /></AuthGuard>} />
             <Route path="/scanner" element={<AuthGuard><Scanner /></AuthGuard>} />
             <Route path="/ranking" element={<AuthGuard><Ranking /></AuthGuard>} />
+            <Route path="/produtos" element={<AuthGuard><Products /></AuthGuard>} />
+            <Route path="/midias" element={<AuthGuard><Media /></AuthGuard>} />
             <Route path="/admin" element={<Admin />} /> {/* AuthGuard is already in Admin component with role restriction */}
             
             {/* Fallback */}

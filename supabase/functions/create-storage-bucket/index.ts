@@ -29,9 +29,10 @@ serve(async (req) => {
       throw bucketsError
     }
 
-    const bucketExists = buckets.some((bucket) => bucket.name === 'mission-evidences')
+    // Check and create mission-evidences bucket
+    const missionBucketExists = buckets.some((bucket) => bucket.name === 'mission-evidences')
 
-    if (!bucketExists) {
+    if (!missionBucketExists) {
       const { error } = await supabaseAdmin
         .storage
         .createBucket('mission-evidences', {
@@ -45,8 +46,25 @@ serve(async (req) => {
       }
     }
 
+    // Check and create media-files bucket
+    const mediaBucketExists = buckets.some((bucket) => bucket.name === 'media-files')
+
+    if (!mediaBucketExists) {
+      const { error } = await supabaseAdmin
+        .storage
+        .createBucket('media-files', {
+          public: true,
+          fileSizeLimit: 52428800, // 50MB
+          allowedMimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'video/mp4', 'application/pdf']
+        })
+
+      if (error) {
+        throw error
+      }
+    }
+
     return new Response(
-      JSON.stringify({ message: 'Storage bucket setup complete' }),
+      JSON.stringify({ message: 'Storage buckets setup complete' }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,

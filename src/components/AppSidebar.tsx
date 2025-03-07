@@ -1,5 +1,5 @@
 
-import { Trophy, Map, QrCode, Store, Medal, Home } from "lucide-react";
+import { Trophy, Map, QrCode, Store, Medal, Home, FileVideo, Package2 } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -17,6 +17,8 @@ const menuItems = [
   { title: "Missões", icon: Medal, url: "/missoes" },
   { title: "Scanner QR", icon: QrCode, url: "/scanner" },
   { title: "Ranking", icon: Trophy, url: "/ranking" },
+  { title: "Produtos", icon: Package2, url: "/produtos" },
+  { title: "Mídias", icon: FileVideo, url: "/midias" },
   { title: "Loja de Prêmios", icon: Store, url: "/loja" },
 ];
 
