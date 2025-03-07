@@ -1,10 +1,21 @@
 
+import React, { useState, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { Card } from "@/components/ui/card";
-import { Medal, FlaskConical, HandIcon, Palette, QrCode, Droplets, ClipboardCheck, Home, SprayCan } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Medal, FlaskConical, HandIcon, Palette, QrCode, Droplets, ClipboardCheck, Home, SprayCan, Upload, Camera, CheckCircle2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 const missions = [
   {
+    id: "descobrindo-ingredientes",
     title: "Descobrindo os Ingredientes",
     description: "Associe os ingredientes ao produto correto (tinta, argamassa, impermeabilizante, rejunte ou saneante).",
     detailedDescription: "O visitante recebe uma lista de ingredientes e precisa associá-los ao produto correto. Arraste os ingredientes para os produtos dentro do app.",
@@ -124,6 +135,174 @@ const missions = [
 ];
 
 const Missions = () => {
+  const { toast } = useToast();
+  const [selectedMission, setSelectedMission] = useState<any>(null);
+  const [openDialog, setOpenDialog] = useState(false);
+  const [evidenceImage, setEvidenceImage] = useState<File | null>(null);
+  const [evidenceBase64, setEvidenceBase64] = useState<string | null>(null);
+  const [answer, setAnswer] = useState<string>("");
+  const [completedMissions, setCompletedMissions] = useState<string[]>([]);
+  const [userMatricula, setUserMatricula] = useState<string>("");
+  const [userPoints, setUserPoints] = useState<number>(0);
+  const [activeTab, setActiveTab] = useState<string>("available");
+
+  useEffect(() => {
+    // Carregar matrícula do usuário atual
+    const currentUserStr = localStorage.getItem('currentUser');
+    if (currentUserStr) {
+      const currentUser = JSON.parse(currentUserStr);
+      setUserMatricula(currentUser.matricula);
+      
+      // Carregar missões concluídas
+      loadCompletedMissions(currentUser.matricula);
+      
+      // Carregar pontos do usuário
+      loadUserPoints(currentUser.matricula);
+    }
+  }, []);
+
+  const loadCompletedMissions = async (matricula: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('missoes_completadas')
+        .select('missao_id')
+        .eq('matricula', matricula);
+      
+      if (error) throw error;
+      
+      if (data) {
+        setCompletedMissions(data.map(item => item.missao_id));
+      }
+    } catch (error: any) {
+      console.error("Erro ao carregar missões concluídas:", error.message);
+    }
+  };
+
+  const loadUserPoints = async (matricula: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('pontos_usuarios')
+        .select('total_pontos')
+        .eq('matricula', matricula)
+        .single();
+      
+      if (error) throw error;
+      
+      if (data) {
+        setUserPoints(data.total_pontos);
+      }
+    } catch (error: any) {
+      console.error("Erro ao carregar pontos do usuário:", error.message);
+    }
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setEvidenceImage(file);
+      
+      // Converter imagem para base64 para exibição
+      const reader = new FileReader();
+      reader.onload = () => {
+        setEvidenceBase64(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleCompleteMission = async () => {
+    if (!selectedMission) return;
+    
+    try {
+      let evidenceUrl = null;
+      
+      // Se tiver imagem, fazer upload
+      if (evidenceImage) {
+        const filename = `${Date.now()}-${evidenceImage.name}`;
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('mission-evidences')
+          .upload(filename, evidenceImage);
+        
+        if (uploadError) throw uploadError;
+        
+        if (uploadData) {
+          evidenceUrl = uploadData.path;
+        }
+      }
+      
+      // Registrar conclusão da missão
+      const { error: missionError } = await supabase
+        .from('missoes_completadas')
+        .insert([
+          { 
+            matricula: userMatricula,
+            missao_id: selectedMission.id,
+            pontos_ganhos: selectedMission.points,
+            evidencia: evidenceUrl,
+            respostas: { answer: answer }
+          }
+        ]);
+      
+      if (missionError) throw missionError;
+      
+      // Atualizar pontos do usuário
+      const { data: pointsData, error: pointsError } = await supabase
+        .from('pontos_usuarios')
+        .select('total_pontos')
+        .eq('matricula', userMatricula)
+        .single();
+      
+      if (pointsError) throw pointsError;
+      
+      const newTotalPoints = (pointsData?.total_pontos || 0) + selectedMission.points;
+      
+      const { error: updateError } = await supabase
+        .from('pontos_usuarios')
+        .update({ total_pontos: newTotalPoints })
+        .eq('matricula', userMatricula);
+      
+      if (updateError) throw updateError;
+      
+      // Atualizar estados
+      setUserPoints(newTotalPoints);
+      setCompletedMissions([...completedMissions, selectedMission.id]);
+      
+      toast({
+        title: "Missão completada!",
+        description: `Você ganhou ${selectedMission.points} pontos pela conclusão da missão "${selectedMission.title}".`,
+      });
+      
+      // Limpar dados do formulário
+      setEvidenceImage(null);
+      setEvidenceBase64(null);
+      setAnswer("");
+      setOpenDialog(false);
+    } catch (error: any) {
+      toast({
+        title: "Erro ao completar missão",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleStartMission = (mission: any) => {
+    setSelectedMission(mission);
+    setOpenDialog(true);
+  };
+
+  const isMissionCompleted = (missionId: string) => {
+    return completedMissions.includes(missionId);
+  };
+
+  const availableMissions = missions.filter(
+    mission => !isMissionCompleted(mission.id)
+  );
+  
+  const completedMissionsList = missions.filter(
+    mission => isMissionCompleted(mission.id)
+  );
+
   return (
     <Layout>
       <div className="max-w-4xl mx-auto space-y-6">
@@ -132,59 +311,207 @@ const Missions = () => {
           <p className="text-muted-foreground">
             Complete missões para ganhar pontos e resgatar prêmios exclusivos
           </p>
+          <div className="bg-primary/10 rounded-full px-6 py-2 inline-flex items-center gap-2">
+            <Medal className="h-5 w-5 text-primary" />
+            <span className="font-bold">{userPoints} pontos</span>
+          </div>
         </header>
 
-        <div className="grid sm:grid-cols-2 gap-4">
-          {missions.map((mission) => (
-            <Card key={mission.title} className="glass-card p-6 space-y-4 hover:scale-[1.02] transition-transform">
-              <div className="space-y-4">
-                <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <mission.icon className="w-6 h-6 text-primary" />
-                  </div>
-                  <div className="space-y-2 flex-1">
-                    <h3 className="font-semibold">{mission.title}</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {mission.detailedDescription}
-                    </p>
-                    <div className="flex items-center gap-1 text-primary font-medium">
-                      <Medal className="w-4 h-4" />
-                      <span>{mission.points} pontos</span>
-                    </div>
-                  </div>
-                </div>
-
-                {mission.example && (
-                  <div className="mt-4 p-4 bg-primary/5 rounded-lg space-y-3">
-                    <p className="font-medium text-sm">Exemplo de pergunta:</p>
-                    <p className="text-sm">{mission.example.question}</p>
-                    <div className="space-y-2">
-                      {mission.example.options.map((option, index) => (
-                        <div
-                          key={index}
-                          className={`p-2 rounded text-sm ${
-                            option.correct
-                              ? "bg-green-500/10 text-green-700 font-medium"
-                              : "bg-muted"
-                          }`}
-                        >
-                          {option.text} {option.correct && "✅"}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid grid-cols-2 w-[400px] mx-auto">
+            <TabsTrigger value="available">Disponíveis ({availableMissions.length})</TabsTrigger>
+            <TabsTrigger value="completed">Completadas ({completedMissionsList.length})</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="available" className="mt-6">
+            <div className="grid sm:grid-cols-2 gap-4">
+              {availableMissions.map((mission) => (
+                <Card key={mission.id} className="glass-card p-6 space-y-4 hover:scale-[1.02] transition-transform">
+                  <div className="space-y-4">
+                    <div className="flex items-start gap-4">
+                      <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <mission.icon className="w-6 h-6 text-primary" />
+                      </div>
+                      <div className="space-y-2 flex-1">
+                        <h3 className="font-semibold">{mission.title}</h3>
+                        <p className="text-sm text-muted-foreground">
+                          {mission.description}
+                        </p>
+                        <div className="flex items-center gap-1 text-primary font-medium">
+                          <Medal className="w-4 h-4" />
+                          <span>{mission.points} pontos</span>
                         </div>
-                      ))}
+                      </div>
+                    </div>
+
+                    {mission.example && (
+                      <div className="mt-4 p-4 bg-primary/5 rounded-lg space-y-3">
+                        <p className="font-medium text-sm">Exemplo de pergunta:</p>
+                        <p className="text-sm">{mission.example.question}</p>
+                        <div className="space-y-2">
+                          {mission.example.options.map((option, index) => (
+                            <div
+                              key={index}
+                              className={`p-2 rounded text-sm ${
+                                option.correct
+                                  ? "bg-green-500/10 text-green-700 font-medium"
+                                  : "bg-muted"
+                              }`}
+                            >
+                              {option.text} {option.correct && "✅"}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {mission.funFact && (
+                      <div className="mt-4 p-4 bg-primary/5 rounded-lg">
+                        <p className="text-sm font-medium">Curiosidade:</p>
+                        <p className="text-sm">{mission.funFact}</p>
+                      </div>
+                    )}
+                    
+                    <Button 
+                      className="w-full mt-4" 
+                      onClick={() => handleStartMission(mission)}
+                    >
+                      Iniciar Missão
+                    </Button>
+                  </div>
+                </Card>
+              ))}
+              
+              {availableMissions.length === 0 && (
+                <div className="col-span-2 text-center py-8">
+                  <CheckCircle2 className="h-12 w-12 mx-auto text-green-500 mb-4" />
+                  <h3 className="text-xl font-semibold mb-2">Todas as missões completadas!</h3>
+                  <p className="text-muted-foreground">
+                    Parabéns! Você completou todas as missões disponíveis.
+                  </p>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="completed" className="mt-6">
+            <div className="grid sm:grid-cols-2 gap-4">
+              {completedMissionsList.map((mission) => (
+                <Card key={mission.id} className="glass-card p-6 space-y-4 border-green-500/30 bg-green-50/30 dark:bg-green-950/10">
+                  <div className="space-y-4">
+                    <div className="flex items-start gap-4">
+                      <div className="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center flex-shrink-0">
+                        <CheckCircle2 className="w-6 h-6 text-green-500" />
+                      </div>
+                      <div className="space-y-2 flex-1">
+                        <h3 className="font-semibold flex items-center gap-2">
+                          {mission.title}
+                          <span className="text-xs bg-green-500/20 text-green-700 px-2 py-0.5 rounded-full">
+                            Completada
+                          </span>
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          {mission.description}
+                        </p>
+                        <div className="flex items-center gap-1 text-green-600 font-medium">
+                          <Medal className="w-4 h-4" />
+                          <span>{mission.points} pontos ganhos</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                )}
+                </Card>
+              ))}
+              
+              {completedMissionsList.length === 0 && (
+                <div className="col-span-2 text-center py-8">
+                  <p className="text-muted-foreground">
+                    Você ainda não completou nenhuma missão. Comece agora!
+                  </p>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+        </Tabs>
 
-                {mission.funFact && (
-                  <div className="mt-4 p-4 bg-primary/5 rounded-lg">
-                    <p className="text-sm font-medium">Curiosidade:</p>
-                    <p className="text-sm">{mission.funFact}</p>
-                  </div>
-                )}
+        <Dialog open={openDialog} onOpenChange={setOpenDialog}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>{selectedMission?.title}</DialogTitle>
+              <DialogDescription>
+                {selectedMission?.detailedDescription}
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4 py-4">
+              {selectedMission?.example && (
+                <div className="space-y-4">
+                  <Label>Responda à pergunta:</Label>
+                  <p className="text-sm font-medium">{selectedMission.example.question}</p>
+                  
+                  <RadioGroup value={answer} onValueChange={setAnswer}>
+                    {selectedMission.example.options.map((option, index) => (
+                      <div key={index} className="flex items-center space-x-2">
+                        <RadioGroupItem value={option.text} id={`option-${index}`} />
+                        <Label htmlFor={`option-${index}`}>{option.text}</Label>
+                      </div>
+                    ))}
+                  </RadioGroup>
+                </div>
+              )}
+              
+              {!selectedMission?.example && (
+                <div className="space-y-2">
+                  <Label htmlFor="answer">Descreva como você completou a missão:</Label>
+                  <Textarea 
+                    id="answer" 
+                    value={answer}
+                    onChange={(e) => setAnswer(e.target.value)}
+                    placeholder="Explique brevemente como você realizou a atividade..."
+                    rows={4}
+                  />
+                </div>
+              )}
+              
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Camera className="h-4 w-4" />
+                  Evidência (opcional)
+                </Label>
+                <div className="grid gap-4">
+                  <Input
+                    id="evidence"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                  />
+                  
+                  {evidenceBase64 && (
+                    <div className="mt-2">
+                      <p className="text-sm font-medium mb-2">Prévia da imagem:</p>
+                      <img 
+                        src={evidenceBase64} 
+                        alt="Evidência da missão" 
+                        className="max-h-40 rounded-md object-contain bg-accent/50 p-2" 
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
-            </Card>
-          ))}
-        </div>
+            </div>
+            
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setOpenDialog(false)}>Cancelar</Button>
+              <Button 
+                onClick={handleCompleteMission}
+                disabled={!answer}
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                Completar Missão
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );

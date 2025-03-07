@@ -67,6 +67,129 @@ export type Database = {
           },
         ]
       }
+      matriculas_funcionarios: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          nome: string
+          numero_matricula: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome: string
+          numero_matricula: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome?: string
+          numero_matricula?: string
+        }
+        Relationships: []
+      }
+      missoes_completadas: {
+        Row: {
+          created_at: string
+          evidencia: string | null
+          id: string
+          matricula: string
+          missao_id: string
+          pontos_ganhos: number
+          respostas: Json | null
+        }
+        Insert: {
+          created_at?: string
+          evidencia?: string | null
+          id?: string
+          matricula: string
+          missao_id: string
+          pontos_ganhos: number
+          respostas?: Json | null
+        }
+        Update: {
+          created_at?: string
+          evidencia?: string | null
+          id?: string
+          matricula?: string
+          missao_id?: string
+          pontos_ganhos?: number
+          respostas?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "missoes_completadas_matricula_fkey"
+            columns: ["matricula"]
+            isOneToOne: false
+            referencedRelation: "matriculas_funcionarios"
+            referencedColumns: ["numero_matricula"]
+          },
+        ]
+      }
+      pontos_usuarios: {
+        Row: {
+          created_at: string
+          id: string
+          matricula: string
+          total_pontos: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          matricula: string
+          total_pontos?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          matricula?: string
+          total_pontos?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pontos_usuarios_matricula_fkey"
+            columns: ["matricula"]
+            isOneToOne: true
+            referencedRelation: "matriculas_funcionarios"
+            referencedColumns: ["numero_matricula"]
+          },
+        ]
+      }
+      premios_resgatados: {
+        Row: {
+          data_resgate: string
+          id: string
+          matricula: string
+          premio_id: string
+        }
+        Insert: {
+          data_resgate?: string
+          id?: string
+          matricula: string
+          premio_id: string
+        }
+        Update: {
+          data_resgate?: string
+          id?: string
+          matricula?: string
+          premio_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "premios_resgatados_matricula_fkey"
+            columns: ["matricula"]
+            isOneToOne: false
+            referencedRelation: "matriculas_funcionarios"
+            referencedColumns: ["numero_matricula"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
