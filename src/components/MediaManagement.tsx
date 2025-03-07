@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Plus, Trash2, Download, Image, FileVideo, FilePlus, Film, FileText, Maximize2 } from "lucide-react";
+import { Loader2, Plus, Trash2, Download, Image, FileVideo, FilePlus, Film, FileText, Maximize2, Edit, Save } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,9 +29,14 @@ export const MediaManagement = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [openDialog, setOpenDialog] = useState(false);
   const [openPreviewDialog, setOpenPreviewDialog] = useState(false);
+  const [openEditDialog, setOpenEditDialog] = useState(false);
   const [selectedFile, setSelectedFile] = useState<MediaFile | null>(null);
   const [newMedia, setNewMedia] = useState({
     file: null as File | null,
+    title: "",
+    description: ""
+  });
+  const [editMedia, setEditMedia] = useState({
     title: "",
     description: ""
   });
@@ -252,6 +257,62 @@ export const MediaManagement = () => {
     setSelectedFile(file);
     setOpenPreviewDialog(true);
   };
+  
+  const handleOpenEdit = (file: MediaFile) => {
+    setSelectedFile(file);
+    setEditMedia({
+      title: file.title,
+      description: file.description || ""
+    });
+    setOpenEditDialog(true);
+  };
+  
+  const handleUpdateMedia = async () => {
+    if (!selectedFile || !editMedia.title) {
+      toast({
+        title: "Campos obrigatórios",
+        description: "Por favor, adicione um título para a mídia.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    try {
+      const { error } = await supabase
+        .from('media_metadata')
+        .update({
+          title: editMedia.title,
+          description: editMedia.description || null
+        })
+        .eq('filename', selectedFile.name);
+        
+      if (error) {
+        throw error;
+      }
+      
+      toast({
+        title: "Mídia atualizada",
+        description: "As informações da mídia foram atualizadas com sucesso.",
+      });
+      
+      // Atualizar o arquivo na lista local
+      setFiles(files.map(file => 
+        file.name === selectedFile.name 
+          ? {...file, title: editMedia.title, description: editMedia.description || null} 
+          : file
+      ));
+      
+      setOpenEditDialog(false);
+      setSelectedFile(null);
+    } catch (error) {
+      console.error("Erro ao atualizar mídia:", error);
+      toast({
+        title: "Erro ao atualizar mídia",
+        description: "Não foi possível atualizar as informações da mídia.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const renderFilePreview = (file: MediaFile, fullSize: boolean = false) => {
     const containerClass = fullSize ? "w-full h-auto max-h-[70vh]" : "rounded-md object-cover w-full h-full";
@@ -398,6 +459,17 @@ export const MediaManagement = () => {
                         Baixar
                       </Button>
                       
+                      {isAdmin && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleOpenEdit(file)}
+                        >
+                          <Edit className="h-4 w-4 mr-1" />
+                          Editar
+                        </Button>
+                      )}
+                      
                       <Button
                         variant="ghost"
                         size="sm"
@@ -436,6 +508,7 @@ export const MediaManagement = () => {
         </CardContent>
       </Card>
 
+      {/* Dialog de visualização */}
       <Dialog open={openPreviewDialog} onOpenChange={setOpenPreviewDialog}>
         <DialogContent className="sm:max-w-[800px]">
           {selectedFile && (
@@ -465,6 +538,62 @@ export const MediaManagement = () => {
                 </Button>
                 <Button variant="default" onClick={() => setOpenPreviewDialog(false)}>
                   Fechar
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+      
+      {/* Dialog de edição */}
+      <Dialog open={openEditDialog} onOpenChange={setOpenEditDialog}>
+        <DialogContent>
+          {selectedFile && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Editar Mídia</DialogTitle>
+                <DialogDescription>
+                  Altere as informações da mídia selecionada
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-title">Título</Label>
+                  <Input 
+                    id="edit-title" 
+                    value={editMedia.title}
+                    onChange={(e) => setEditMedia({...editMedia, title: e.target.value})}
+                    placeholder="Digite um título para o arquivo"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="edit-description">Descrição (opcional)</Label>
+                  <Textarea 
+                    id="edit-description" 
+                    value={editMedia.description}
+                    onChange={(e) => setEditMedia({...editMedia, description: e.target.value})}
+                    placeholder="Digite uma descrição para o arquivo"
+                    rows={3}
+                  />
+                </div>
+                
+                <div className="mt-2">
+                  <Label>Pré-visualização</Label>
+                  <div className="mt-2 border rounded-md p-2">
+                    {renderFilePreview(selectedFile)}
+                  </div>
+                </div>
+              </div>
+              
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setOpenEditDialog(false)}>
+                  Cancelar
+                </Button>
+                <Button onClick={handleUpdateMedia}>
+                  <Save className="mr-2 h-4 w-4" />
+                  Salvar Alterações
                 </Button>
               </DialogFooter>
             </>

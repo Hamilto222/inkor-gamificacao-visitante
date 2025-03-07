@@ -38,6 +38,27 @@ export type Database = {
           },
         ]
       }
+      grupos_usuarios: {
+        Row: {
+          data_criacao: string
+          descricao: string | null
+          id: string
+          nome: string
+        }
+        Insert: {
+          data_criacao?: string
+          descricao?: string | null
+          id?: string
+          nome: string
+        }
+        Update: {
+          data_criacao?: string
+          descricao?: string | null
+          id?: string
+          nome?: string
+        }
+        Relationships: []
+      }
       matriculas: {
         Row: {
           created_at: string
@@ -71,6 +92,7 @@ export type Database = {
         Row: {
           ativo: boolean
           created_at: string
+          grupo_id: string | null
           id: string
           nome: string
           numero_matricula: string
@@ -78,6 +100,7 @@ export type Database = {
         Insert: {
           ativo?: boolean
           created_at?: string
+          grupo_id?: string | null
           id?: string
           nome: string
           numero_matricula: string
@@ -85,11 +108,20 @@ export type Database = {
         Update: {
           ativo?: boolean
           created_at?: string
+          grupo_id?: string | null
           id?: string
           nome?: string
           numero_matricula?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "matriculas_funcionarios_grupo_id_fkey"
+            columns: ["grupo_id"]
+            isOneToOne: false
+            referencedRelation: "grupos_usuarios"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       media_metadata: {
         Row: {
@@ -112,6 +144,84 @@ export type Database = {
           filename?: string
           id?: string
           title?: string
+        }
+        Relationships: []
+      }
+      missao_grupo: {
+        Row: {
+          grupo_id: string
+          id: string
+          missao_id: string
+        }
+        Insert: {
+          grupo_id: string
+          id?: string
+          missao_id: string
+        }
+        Update: {
+          grupo_id?: string
+          id?: string
+          missao_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "missao_grupo_grupo_id_fkey"
+            columns: ["grupo_id"]
+            isOneToOne: false
+            referencedRelation: "grupos_usuarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "missao_grupo_missao_id_fkey"
+            columns: ["missao_id"]
+            isOneToOne: false
+            referencedRelation: "missoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      missoes: {
+        Row: {
+          ativo: boolean
+          data_criacao: string
+          descricao: string
+          evidencia_obrigatoria: boolean
+          grupo_id: string | null
+          id: string
+          imagem_url: string | null
+          opcoes: Json | null
+          pontos: number
+          resposta_correta: string | null
+          tipo: string
+          titulo: string
+        }
+        Insert: {
+          ativo?: boolean
+          data_criacao?: string
+          descricao: string
+          evidencia_obrigatoria?: boolean
+          grupo_id?: string | null
+          id?: string
+          imagem_url?: string | null
+          opcoes?: Json | null
+          pontos?: number
+          resposta_correta?: string | null
+          tipo: string
+          titulo: string
+        }
+        Update: {
+          ativo?: boolean
+          data_criacao?: string
+          descricao?: string
+          evidencia_obrigatoria?: boolean
+          grupo_id?: string | null
+          id?: string
+          imagem_url?: string | null
+          opcoes?: Json | null
+          pontos?: number
+          resposta_correta?: string | null
+          tipo?: string
+          titulo?: string
         }
         Relationships: []
       }
@@ -153,6 +263,42 @@ export type Database = {
           },
         ]
       }
+      notificacoes: {
+        Row: {
+          admin_only: boolean
+          dados_extras: Json | null
+          data_criacao: string
+          id: string
+          lida: boolean
+          mensagem: string
+          tipo: string
+          titulo: string
+          usuario_matricula: string | null
+        }
+        Insert: {
+          admin_only?: boolean
+          dados_extras?: Json | null
+          data_criacao?: string
+          id?: string
+          lida?: boolean
+          mensagem: string
+          tipo: string
+          titulo: string
+          usuario_matricula?: string | null
+        }
+        Update: {
+          admin_only?: boolean
+          dados_extras?: Json | null
+          data_criacao?: string
+          id?: string
+          lida?: boolean
+          mensagem?: string
+          tipo?: string
+          titulo?: string
+          usuario_matricula?: string | null
+        }
+        Relationships: []
+      }
       pontos_usuarios: {
         Row: {
           created_at: string
@@ -185,6 +331,32 @@ export type Database = {
           },
         ]
       }
+      premio_grupo: {
+        Row: {
+          grupo_id: string
+          id: string
+          premio_id: string
+        }
+        Insert: {
+          grupo_id: string
+          id?: string
+          premio_id: string
+        }
+        Update: {
+          grupo_id?: string
+          id?: string
+          premio_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "premio_grupo_grupo_id_fkey"
+            columns: ["grupo_id"]
+            isOneToOne: false
+            referencedRelation: "grupos_usuarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       premios_resgatados: {
         Row: {
           data_resgate: string
@@ -207,6 +379,42 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "premios_resgatados_matricula_fkey"
+            columns: ["matricula"]
+            isOneToOne: false
+            referencedRelation: "matriculas_funcionarios"
+            referencedColumns: ["numero_matricula"]
+          },
+        ]
+      }
+      usuario_grupo: {
+        Row: {
+          data_adicao: string
+          grupo_id: string
+          id: string
+          matricula: string
+        }
+        Insert: {
+          data_adicao?: string
+          grupo_id: string
+          id?: string
+          matricula: string
+        }
+        Update: {
+          data_adicao?: string
+          grupo_id?: string
+          id?: string
+          matricula?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "usuario_grupo_grupo_id_fkey"
+            columns: ["grupo_id"]
+            isOneToOne: false
+            referencedRelation: "grupos_usuarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "usuario_grupo_matricula_fkey"
             columns: ["matricula"]
             isOneToOne: false
             referencedRelation: "matriculas_funcionarios"
