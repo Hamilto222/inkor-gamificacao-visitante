@@ -7,9 +7,10 @@ import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Plus, Trash2, Download, Image, FileVideo, FilePlus, Film, FileText } from "lucide-react";
+import { Loader2, Plus, Trash2, Download, Image, FileVideo, FilePlus, Film, FileText, Maximize2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
+import { Textarea } from "@/components/ui/textarea";
 
 interface MediaFile {
   id: string;
@@ -17,6 +18,8 @@ interface MediaFile {
   type: string;
   url: string;
   created_at: string;
+  title: string;
+  description: string | null;
 }
 
 export const MediaManagement = () => {
@@ -25,6 +28,13 @@ export const MediaManagement = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [openDialog, setOpenDialog] = useState(false);
+  const [openPreviewDialog, setOpenPreviewDialog] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<MediaFile | null>(null);
+  const [newMedia, setNewMedia] = useState({
+    file: null as File | null,
+    title: "",
+    description: ""
+  });
   const { toast } = useToast();
 
   useEffect(() => {
@@ -54,12 +64,21 @@ export const MediaManagement = () => {
               .from('media-files')
               .createSignedUrl(file.name, 3600); // URL válida por 1 hora
               
+            // Tentar obter os metadados do arquivo (título e descrição)
+            const { data: metaData, error: metaError } = await supabase
+              .from('media_metadata')
+              .select('*')
+              .eq('filename', file.name)
+              .single();
+              
             return {
               id: file.id,
               name: file.name,
               type: getFileType(file.name),
               url: urlData?.signedUrl || '',
-              created_at: file.created_at
+              created_at: file.created_at,
+              title: metaData?.title || file.name,
+              description: metaData?.description || ''
             };
           })
         );
@@ -101,24 +120,40 @@ export const MediaManagement = () => {
     }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (file) {
+      setNewMedia({
+        ...newMedia,
+        file
+      });
+    }
+  };
+
+  const handleFileUpload = async () => {
+    if (!newMedia.file || !newMedia.title) {
+      toast({
+        title: "Campos obrigatórios",
+        description: "Por favor, selecione um arquivo e adicione um título.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     setIsUploading(true);
     setUploadProgress(0);
 
     try {
-      const fileExt = file.name.split('.').pop();
+      const fileExt = newMedia.file.name.split('.').pop();
       const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
       
       // Set initial progress
       setUploadProgress(10);
       
-      // Upload without onUploadProgress since it's not supported in the FileOptions type
+      // Upload file
       const { error } = await supabase.storage
         .from('media-files')
-        .upload(fileName, file, {
+        .upload(fileName, newMedia.file, {
           cacheControl: '3600'
         });
 
@@ -129,12 +164,32 @@ export const MediaManagement = () => {
       // Upload completed
       setUploadProgress(100);
 
+      // Salvar metadados do arquivo (título e descrição)
+      const { error: metaError } = await supabase
+        .from('media_metadata')
+        .insert([
+          {
+            filename: fileName,
+            title: newMedia.title,
+            description: newMedia.description
+          }
+        ]);
+
+      if (metaError) {
+        throw metaError;
+      }
+
       toast({
         title: "Arquivo enviado com sucesso",
         description: "O arquivo foi carregado no sistema.",
       });
 
       setOpenDialog(false);
+      setNewMedia({
+        file: null,
+        title: "",
+        description: ""
+      });
       await loadMediaFiles(); // Recarregar a lista
     } catch (error) {
       console.error("Erro ao enviar arquivo:", error);
@@ -151,6 +206,13 @@ export const MediaManagement = () => {
 
   const handleDeleteFile = async (fileName: string) => {
     try {
+      // Primeiro, excluir metadados
+      await supabase
+        .from('media_metadata')
+        .delete()
+        .eq('filename', fileName);
+        
+      // Depois, excluir o arquivo
       const { error } = await supabase.storage
         .from('media-files')
         .remove([fileName]);
@@ -180,19 +242,27 @@ export const MediaManagement = () => {
     const link = document.createElement('a');
     link.href = url;
     link.download = fileName;
+    link.target = "_blank";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  const renderFilePreview = (file: MediaFile) => {
+  const handleOpenPreview = (file: MediaFile) => {
+    setSelectedFile(file);
+    setOpenPreviewDialog(true);
+  };
+
+  const renderFilePreview = (file: MediaFile, fullSize: boolean = false) => {
+    const containerClass = fullSize ? "w-full h-auto max-h-[70vh]" : "rounded-md object-cover w-full h-full";
+    
     if (file.type === 'image') {
       return (
         <AspectRatio ratio={16 / 9}>
           <img 
             src={file.url} 
-            alt={file.name} 
-            className="rounded-md object-cover w-full h-full"
+            alt={file.title} 
+            className={containerClass}
           />
         </AspectRatio>
       );
@@ -202,7 +272,7 @@ export const MediaManagement = () => {
           <video 
             src={file.url} 
             controls 
-            className="rounded-md w-full h-full"
+            className={containerClass}
           />
         </AspectRatio>
       );
@@ -237,12 +307,33 @@ export const MediaManagement = () => {
               
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
+                  <Label htmlFor="title">Título</Label>
+                  <Input 
+                    id="title" 
+                    value={newMedia.title}
+                    onChange={(e) => setNewMedia({...newMedia, title: e.target.value})}
+                    placeholder="Digite um título para o arquivo"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="description">Descrição (opcional)</Label>
+                  <Textarea 
+                    id="description" 
+                    value={newMedia.description}
+                    onChange={(e) => setNewMedia({...newMedia, description: e.target.value})}
+                    placeholder="Digite uma descrição para o arquivo"
+                    rows={3}
+                  />
+                </div>
+                
+                <div className="space-y-2">
                   <Label htmlFor="file">Arquivo</Label>
                   <Input 
                     id="file" 
                     type="file" 
                     accept="image/*,video/*,application/pdf"
-                    onChange={handleFileUpload}
+                    onChange={handleFileChange}
                     disabled={isUploading}
                   />
                   {isUploading && (
@@ -263,8 +354,8 @@ export const MediaManagement = () => {
                 <Button variant="outline" onClick={() => setOpenDialog(false)} disabled={isUploading}>
                   Cancelar
                 </Button>
-                <Button disabled={true} className="opacity-0">
-                  Confirmar
+                <Button onClick={handleFileUpload} disabled={isUploading || !newMedia.file || !newMedia.title}>
+                  {isUploading ? "Enviando..." : "Confirmar"}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -289,13 +380,13 @@ export const MediaManagement = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {files.map((file) => (
                 <Card key={file.id} className="overflow-hidden">
-                  <div className="p-2">
+                  <div className="p-2 cursor-pointer" onClick={() => handleOpenPreview(file)}>
                     {renderFilePreview(file)}
                   </div>
                   <CardContent className="p-3">
                     <div className="flex items-center space-x-2">
                       {getFileIcon(file.type)}
-                      <p className="text-sm font-medium truncate flex-1">{file.name}</p>
+                      <p className="text-sm font-medium truncate flex-1">{file.title}</p>
                     </div>
                     <div className="flex items-center justify-between mt-2">
                       <Button 
@@ -305,6 +396,15 @@ export const MediaManagement = () => {
                       >
                         <Download className="h-4 w-4 mr-1" />
                         Baixar
+                      </Button>
+                      
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleOpenPreview(file)}
+                      >
+                        <Maximize2 className="h-4 w-4 mr-1" />
+                        Visualizar
                       </Button>
                       
                       {isAdmin && (
@@ -335,6 +435,42 @@ export const MediaManagement = () => {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={openPreviewDialog} onOpenChange={setOpenPreviewDialog}>
+        <DialogContent className="sm:max-w-[800px]">
+          {selectedFile && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{selectedFile.title}</DialogTitle>
+                {selectedFile.description && (
+                  <DialogDescription>
+                    {selectedFile.description}
+                  </DialogDescription>
+                )}
+              </DialogHeader>
+              
+              <div className="py-4">
+                <div className="mb-4">
+                  {renderFilePreview(selectedFile, true)}
+                </div>
+              </div>
+              
+              <DialogFooter>
+                <Button 
+                  variant="outline" 
+                  onClick={() => handleDownloadFile(selectedFile.url, selectedFile.name)}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Baixar
+                </Button>
+                <Button variant="default" onClick={() => setOpenPreviewDialog(false)}>
+                  Fechar
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

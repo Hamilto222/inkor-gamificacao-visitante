@@ -91,6 +91,30 @@ export type Database = {
         }
         Relationships: []
       }
+      media_metadata: {
+        Row: {
+          created_at: string
+          description: string | null
+          filename: string
+          id: string
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          filename: string
+          id?: string
+          title: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          filename?: string
+          id?: string
+          title?: string
+        }
+        Relationships: []
+      }
       missoes_completadas: {
         Row: {
           created_at: string
