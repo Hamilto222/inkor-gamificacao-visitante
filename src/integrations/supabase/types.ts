@@ -9,6 +9,45 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      comentarios_post: {
+        Row: {
+          data_criacao: string
+          id: string
+          matricula: string
+          post_id: string
+          texto: string
+        }
+        Insert: {
+          data_criacao?: string
+          id?: string
+          matricula: string
+          post_id: string
+          texto: string
+        }
+        Update: {
+          data_criacao?: string
+          id?: string
+          matricula?: string
+          post_id?: string
+          texto?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comentarios_post_matricula_fkey"
+            columns: ["matricula"]
+            isOneToOne: false
+            referencedRelation: "matriculas_funcionarios"
+            referencedColumns: ["numero_matricula"]
+          },
+          {
+            foreignKeyName: "comentarios_post_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts_feed"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       funcionarios: {
         Row: {
           created_at: string
@@ -331,6 +370,66 @@ export type Database = {
           },
         ]
       }
+      post_grupo: {
+        Row: {
+          grupo_id: string
+          id: string
+          post_id: string
+        }
+        Insert: {
+          grupo_id: string
+          id?: string
+          post_id: string
+        }
+        Update: {
+          grupo_id?: string
+          id?: string
+          post_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_grupo_grupo_id_fkey"
+            columns: ["grupo_id"]
+            isOneToOne: false
+            referencedRelation: "grupos_usuarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_grupo_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts_feed"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      posts_feed: {
+        Row: {
+          ativo: boolean
+          conteudo: string
+          data_criacao: string
+          id: string
+          imagem_url: string | null
+          titulo: string
+        }
+        Insert: {
+          ativo?: boolean
+          conteudo: string
+          data_criacao?: string
+          id?: string
+          imagem_url?: string | null
+          titulo: string
+        }
+        Update: {
+          ativo?: boolean
+          conteudo?: string
+          data_criacao?: string
+          id?: string
+          imagem_url?: string | null
+          titulo?: string
+        }
+        Relationships: []
+      }
       premio_grupo: {
         Row: {
           grupo_id: string
@@ -356,6 +455,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      premios: {
+        Row: {
+          ativo: boolean
+          data_criacao: string
+          descricao: string
+          id: string
+          imagem_url: string | null
+          nome: string
+          pontos_necessarios: number
+          quantidade: number
+        }
+        Insert: {
+          ativo?: boolean
+          data_criacao?: string
+          descricao: string
+          id?: string
+          imagem_url?: string | null
+          nome: string
+          pontos_necessarios: number
+          quantidade?: number
+        }
+        Update: {
+          ativo?: boolean
+          data_criacao?: string
+          descricao?: string
+          id?: string
+          imagem_url?: string | null
+          nome?: string
+          pontos_necessarios?: number
+          quantidade?: number
+        }
+        Relationships: []
       }
       premios_resgatados: {
         Row: {
@@ -383,6 +515,45 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "matriculas_funcionarios"
             referencedColumns: ["numero_matricula"]
+          },
+        ]
+      }
+      reacoes_post: {
+        Row: {
+          data_criacao: string
+          id: string
+          matricula: string
+          post_id: string
+          tipo: string
+        }
+        Insert: {
+          data_criacao?: string
+          id?: string
+          matricula: string
+          post_id: string
+          tipo: string
+        }
+        Update: {
+          data_criacao?: string
+          id?: string
+          matricula?: string
+          post_id?: string
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reacoes_post_matricula_fkey"
+            columns: ["matricula"]
+            isOneToOne: false
+            referencedRelation: "matriculas_funcionarios"
+            referencedColumns: ["numero_matricula"]
+          },
+          {
+            foreignKeyName: "reacoes_post_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts_feed"
+            referencedColumns: ["id"]
           },
         ]
       }
