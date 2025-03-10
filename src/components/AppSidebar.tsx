@@ -1,5 +1,5 @@
 
-import { Trophy, Map, QrCode, Store, Medal, Home, FileVideo, Package2 } from "lucide-react";
+import { Trophy, Map, QrCode, Store, Medal, Home, FileVideo, Package2, MessageSquare } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -10,16 +10,17 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { Link } from "react-router-dom";
 
 const menuItems = [
   { title: "Início", icon: Home, url: "/" },
-  { title: "Mapa da Fábrica", icon: Map, url: "/mapa" },
-  { title: "Missões", icon: Medal, url: "/missoes" },
+  { title: "Mapa da Fábrica", icon: Map, url: "/map" },
+  { title: "Missões", icon: Medal, url: "/missions" },
   { title: "Scanner QR", icon: QrCode, url: "/scanner" },
   { title: "Ranking", icon: Trophy, url: "/ranking" },
-  { title: "Produtos", icon: Package2, url: "/produtos" },
-  { title: "Mídias", icon: FileVideo, url: "/midias" },
-  { title: "Loja de Prêmios", icon: Store, url: "/loja" },
+  { title: "Feed de Notícias", icon: MessageSquare, url: "/news" },
+  { title: "Mídias", icon: FileVideo, url: "/media" },
+  { title: "Loja de Prêmios", icon: Store, url: "/store" },
 ];
 
 export function AppSidebar() {
@@ -33,10 +34,10 @@ export function AppSidebar() {
               {menuItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
-                    <a href={item.url} className="flex items-center gap-3">
+                    <Link to={item.url} className="flex items-center gap-3">
                       <item.icon className="w-5 h-5" />
                       <span>{item.title}</span>
-                    </a>
+                    </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
