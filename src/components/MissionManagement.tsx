@@ -3,81 +3,89 @@ import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Loader2, Plus, Trash2, Edit, Check, PenSquare, Target, ListTodo, HelpCircle, Award } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Plus, Search, Trash2, Image, HelpCircle, Activity, ListChecks } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { AspectRatio } from "@/components/ui/aspect-ratio";
-import { Switch } from "@/components/ui/switch";
 
-type MissionType = "quiz" | "task" | "activity";
+interface MissionOption {
+  text: string;
+  value: string;
+}
 
 interface Mission {
-  id: string;
+  id?: string;
   titulo: string;
   descricao: string;
-  tipo: MissionType;
+  tipo: string;
   pontos: number;
-  imagem_url: string | null;
+  imagem_url?: string | null;
   ativo: boolean;
-  opcoes?: { text: string; value: string }[];
-  resposta_correta?: string;
+  opcoes?: MissionOption[] | null;
+  resposta_correta?: string | null;
   evidencia_obrigatoria: boolean;
   grupo_id?: string | null;
 }
 
-interface UserGroup {
-  id: string;
-  nome: string;
-  descricao: string | null;
-}
-
 export const MissionManagement = () => {
   const [missions, setMissions] = useState<Mission[]>([]);
-  const [groups, setGroups] = useState<UserGroup[]>([]);
-  const [isCreatingMission, setIsCreatingMission] = useState(false);
-  const [isEditingMission, setIsEditingMission] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [uploadingImage, setUploadingImage] = useState(false);
-  
-  const [selectedMission, setSelectedMission] = useState<Mission | null>(null);
-  const [newMission, setNewMission] = useState<Partial<Mission>>({
+  const [newMission, setNewMission] = useState<Mission>({
     titulo: "",
     descricao: "",
-    tipo: "task",
+    tipo: "multipla_escolha",
     pontos: 10,
-    imagem_url: null,
     ativo: true,
-    opcoes: [],
-    resposta_correta: "",
     evidencia_obrigatoria: false,
-    grupo_id: null
+    opcoes: [
+      { text: "Opção 1", value: "opcao1" },
+      { text: "Opção 2", value: "opcao2" },
+      { text: "Opção 3", value: "opcao3" },
+    ],
+    resposta_correta: "opcao1"
   });
-  
-  const [newOption, setNewOption] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [openDialog, setOpenDialog] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [options, setOptions] = useState<MissionOption[]>([
+    { text: "Opção 1", value: "opcao1" },
+    { text: "Opção 2", value: "opcao2" },
+    { text: "Opção 3", value: "opcao3" },
+  ]);
   const { toast } = useToast();
-  
+
   useEffect(() => {
     loadMissions();
-    loadGroups();
   }, []);
-  
+
   const loadMissions = async () => {
-    setIsLoading(true);
     try {
-      const { data: missionsData, error } = await supabase
+      setIsLoading(true);
+      const { data, error } = await supabase
         .from('missoes')
         .select('*')
         .order('data_criacao', { ascending: false });
-      
-      if (error) throw error;
-      
-      setMissions(missionsData as Mission[]);
+
+      if (error) {
+        throw error;
+      }
+
+      if (data) {
+        // Need to transform the data to match our Mission type
+        const transformedData = data.map(mission => {
+          return {
+            ...mission,
+            // Convert opcoes to our expected format if it exists
+            opcoes: mission.opcoes ? mission.opcoes as MissionOption[] : null
+          };
+        });
+        
+        setMissions(transformedData as Mission[]);
+      }
     } catch (error) {
       console.error("Erro ao carregar missões:", error);
       toast({
@@ -89,183 +97,139 @@ export const MissionManagement = () => {
       setIsLoading(false);
     }
   };
-  
-  const loadGroups = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('grupos_usuarios')
-        .select('*')
-        .order('nome');
-      
-      if (error) throw error;
-      
-      setGroups(data as UserGroup[]);
-    } catch (error) {
-      console.error("Erro ao carregar grupos:", error);
+
+  const handleAddOption = () => {
+    if (options.length < 10) {
+      const newOptions = [...options];
+      newOptions.push({ text: `Opção ${options.length + 1}`, value: `opcao${options.length + 1}` });
+      setOptions(newOptions);
+      setNewMission({
+        ...newMission,
+        opcoes: newOptions
+      });
     }
   };
-  
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setNewMission({
-      ...newMission,
-      [name]: value,
-    });
-  };
-  
-  const handleNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setNewMission({
-      ...newMission,
-      [name]: parseInt(value) || 0,
-    });
-  };
-  
-  const handleTypeChange = (value: string) => {
-    setNewMission({
-      ...newMission,
-      tipo: value as MissionType,
-    });
-  };
-  
-  const handleGroupChange = (value: string) => {
-    setNewMission({
-      ...newMission,
-      grupo_id: value === "none" ? null : value,
-    });
-  };
-  
-  const handleSwitchChange = (checked: boolean, name: string) => {
-    setNewMission({
-      ...newMission,
-      [name]: checked,
-    });
-  };
-  
-  const handleAddOption = () => {
-    if (!newOption.trim()) return;
-    
-    const option = {
-      text: newOption,
-      value: newOption.toLowerCase().replace(/\s+/g, '_'),
-    };
-    
-    setNewMission({
-      ...newMission,
-      opcoes: [...(newMission.opcoes || []), option],
-    });
-    
-    setNewOption("");
-  };
-  
-  const handleRemoveOption = (indexToRemove: number) => {
-    setNewMission({
-      ...newMission,
-      opcoes: (newMission.opcoes || []).filter((_, index) => index !== indexToRemove),
-    });
-  };
-  
-  const handleSetCorrectAnswer = (value: string) => {
-    setNewMission({
-      ...newMission,
-      resposta_correta: value,
-    });
-  };
-  
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    setUploadingImage(true);
-    
-    try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `mission_${Date.now()}.${fileExt}`;
+
+  const handleRemoveOption = (index: number) => {
+    if (options.length > 2) {
+      const newOptions = [...options];
+      newOptions.splice(index, 1);
+      setOptions(newOptions);
       
-      const { error: uploadError } = await supabase.storage
-        .from('media-files')
-        .upload(fileName, file);
-      
-      if (uploadError) throw uploadError;
-      
-      // Get the URL for the uploaded file
-      const { data: urlData } = await supabase.storage
-        .from('media-files')
-        .createSignedUrl(fileName, 3600);
-      
-      if (urlData?.signedUrl) {
-        setNewMission({
-          ...newMission,
-          imagem_url: urlData.signedUrl,
-        });
-        
-        toast({
-          title: "Imagem enviada com sucesso",
-          description: "A imagem foi adicionada à missão.",
-        });
+      // If the correct answer was the removed option, reset it to the first option
+      let updatedCorrectAnswer = newMission.resposta_correta;
+      if (newMission.resposta_correta === options[index].value) {
+        updatedCorrectAnswer = newOptions[0].value;
       }
-    } catch (error) {
-      console.error("Erro ao enviar imagem:", error);
+      
+      setNewMission({
+        ...newMission,
+        opcoes: newOptions,
+        resposta_correta: updatedCorrectAnswer
+      });
+    } else {
       toast({
-        title: "Erro ao enviar imagem",
-        description: "Não foi possível enviar a imagem.",
+        title: "Mínimo de opções",
+        description: "Uma pergunta de múltipla escolha precisa ter ao menos 2 opções.",
         variant: "destructive",
       });
-    } finally {
-      setUploadingImage(false);
     }
   };
-  
-  const handleCreateMission = async () => {
+
+  const handleOptionChange = (index: number, value: string) => {
+    const newOptions = [...options];
+    newOptions[index].text = value;
+    setOptions(newOptions);
+    setNewMission({
+      ...newMission,
+      opcoes: newOptions
+    });
+  };
+
+  const handleAddMission = async () => {
     if (!newMission.titulo || !newMission.descricao) {
       toast({
         title: "Campos obrigatórios",
-        description: "Preencha o título e a descrição da missão.",
+        description: "Preencha todos os campos obrigatórios.",
         variant: "destructive",
       });
       return;
     }
-    
+
+    if (newMission.tipo === "multipla_escolha" && (!newMission.opcoes || !newMission.resposta_correta)) {
+      toast({
+        title: "Campos obrigatórios",
+        description: "Defina as opções e a resposta correta para a pergunta de múltipla escolha.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
-      // Insert mission to missions table
+      setIsLoading(true);
+      
+      // Prepare mission data for saving
+      const missionData = {
+        titulo: newMission.titulo,
+        descricao: newMission.descricao,
+        tipo: newMission.tipo,
+        pontos: newMission.pontos,
+        ativo: newMission.ativo,
+        evidencia_obrigatoria: newMission.evidencia_obrigatoria,
+        imagem_url: newMission.imagem_url || null
+      };
+      
+      // Add type-specific fields
+      if (newMission.tipo === "multipla_escolha") {
+        Object.assign(missionData, {
+          opcoes: newMission.opcoes,
+          resposta_correta: newMission.resposta_correta
+        });
+      } else {
+        // For other types, we don't need these fields
+        Object.assign(missionData, {
+          opcoes: null,
+          resposta_correta: null
+        });
+      }
+
       const { data, error } = await supabase
         .from('missoes')
-        .insert([{
-          titulo: newMission.titulo,
-          descricao: newMission.descricao,
-          tipo: newMission.tipo,
-          pontos: newMission.pontos,
-          imagem_url: newMission.imagem_url,
-          ativo: newMission.ativo,
-          opcoes: newMission.opcoes && newMission.opcoes.length > 0 ? newMission.opcoes : null,
-          resposta_correta: newMission.tipo === 'quiz' ? newMission.resposta_correta : null,
-          evidencia_obrigatoria: newMission.tipo === 'task' || newMission.tipo === 'activity' ? newMission.evidencia_obrigatoria : false,
-          grupo_id: newMission.grupo_id
-        }])
+        .insert([missionData])
         .select();
-      
-      if (error) throw error;
-      
+
+      if (error) {
+        throw error;
+      }
+
       toast({
-        title: "Missão criada com sucesso",
-        description: "A missão foi adicionada ao sistema.",
+        title: "Missão criada",
+        description: `A missão "${newMission.titulo}" foi criada com sucesso.`,
       });
       
-      setIsCreatingMission(false);
+      // Reset form
       setNewMission({
         titulo: "",
         descricao: "",
-        tipo: "task",
+        tipo: "multipla_escolha",
         pontos: 10,
-        imagem_url: null,
         ativo: true,
-        opcoes: [],
-        resposta_correta: "",
         evidencia_obrigatoria: false,
-        grupo_id: null
+        opcoes: [
+          { text: "Opção 1", value: "opcao1" },
+          { text: "Opção 2", value: "opcao2" },
+          { text: "Opção 3", value: "opcao3" },
+        ],
+        resposta_correta: "opcao1"
       });
       
-      // Reload missions to include the new one
+      setOptions([
+        { text: "Opção 1", value: "opcao1" },
+        { text: "Opção 2", value: "opcao2" },
+        { text: "Opção 3", value: "opcao3" },
+      ]);
+      
+      setOpenDialog(false);
       loadMissions();
     } catch (error) {
       console.error("Erro ao criar missão:", error);
@@ -274,632 +238,244 @@ export const MissionManagement = () => {
         description: "Não foi possível criar a missão.",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
-  
-  const handleEditMission = (mission: Mission) => {
-    setSelectedMission(mission);
-    setNewMission({
-      ...mission,
-    });
-    setIsEditingMission(true);
-  };
-  
-  const handleUpdateMission = async () => {
-    if (!selectedMission || !newMission.titulo || !newMission.descricao) {
-      toast({
-        title: "Campos obrigatórios",
-        description: "Preencha o título e a descrição da missão.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    try {
-      const { error } = await supabase
-        .from('missoes')
-        .update({
-          titulo: newMission.titulo,
-          descricao: newMission.descricao,
-          tipo: newMission.tipo,
-          pontos: newMission.pontos,
-          imagem_url: newMission.imagem_url,
-          ativo: newMission.ativo,
-          opcoes: newMission.opcoes && newMission.opcoes.length > 0 ? newMission.opcoes : null,
-          resposta_correta: newMission.tipo === 'quiz' ? newMission.resposta_correta : null,
-          evidencia_obrigatoria: newMission.tipo === 'task' || newMission.tipo === 'activity' ? newMission.evidencia_obrigatoria : false,
-          grupo_id: newMission.grupo_id
-        })
-        .eq('id', selectedMission.id);
-      
-      if (error) throw error;
-      
-      toast({
-        title: "Missão atualizada com sucesso",
-        description: "As alterações foram salvas.",
-      });
-      
-      setIsEditingMission(false);
-      setSelectedMission(null);
-      
-      // Reload missions to reflect changes
-      loadMissions();
-    } catch (error) {
-      console.error("Erro ao atualizar missão:", error);
-      toast({
-        title: "Erro ao atualizar missão",
-        description: "Não foi possível atualizar a missão.",
-        variant: "destructive",
-      });
-    }
-  };
-  
-  const handleDeleteMission = async (id: string) => {
-    if (confirm("Tem certeza que deseja excluir esta missão?")) {
-      try {
-        const { error } = await supabase
-          .from('missoes')
-          .delete()
-          .eq('id', id);
-        
-        if (error) throw error;
-        
-        toast({
-          title: "Missão excluída",
-          description: "A missão foi removida com sucesso.",
-        });
-        
-        // Update the missions list
-        setMissions(missions.filter(m => m.id !== id));
-      } catch (error) {
-        console.error("Erro ao excluir missão:", error);
-        toast({
-          title: "Erro ao excluir missão",
-          description: "Não foi possível excluir a missão.",
-          variant: "destructive",
-        });
-      }
-    }
-  };
-  
-  const handleToggleActive = async (id: string, currentStatus: boolean) => {
+
+  const handleToggleStatus = async (id: string, currentStatus: boolean) => {
     try {
       const { error } = await supabase
         .from('missoes')
         .update({ ativo: !currentStatus })
         .eq('id', id);
-      
-      if (error) throw error;
-      
-      // Update local state
-      setMissions(missions.map(mission => 
-        mission.id === id ? { ...mission, ativo: !currentStatus } : mission
-      ));
-      
+
+      if (error) {
+        throw error;
+      }
+
       toast({
-        title: `Missão ${!currentStatus ? 'ativada' : 'desativada'}`,
-        description: `A missão foi ${!currentStatus ? 'ativada' : 'desativada'} com sucesso.`,
+        title: currentStatus ? "Missão desativada" : "Missão ativada",
+        description: `A missão foi ${currentStatus ? "desativada" : "ativada"} com sucesso.`,
       });
+
+      loadMissions();
     } catch (error) {
-      console.error("Erro ao alterar status da missão:", error);
+      console.error("Erro ao atualizar status da missão:", error);
       toast({
-        title: "Erro ao alterar status",
-        description: "Não foi possível alterar o status da missão.",
+        title: "Erro ao atualizar missão",
+        description: "Não foi possível atualizar o status da missão.",
         variant: "destructive",
       });
     }
   };
-  
+
   const getMissionTypeIcon = (type: string) => {
     switch (type) {
-      case 'quiz':
-        return <HelpCircle className="h-5 w-5" />;
-      case 'task':
-        return <ListTodo className="h-5 w-5" />;
-      case 'activity':
-        return <Target className="h-5 w-5" />;
+      case "multipla_escolha":
+        return <HelpCircle className="h-4 w-4" />;
+      case "atividade":
+        return <Activity className="h-4 w-4" />;
+      case "tarefa":
+        return <ListChecks className="h-4 w-4" />;
       default:
-        return <HelpCircle className="h-5 w-5" />;
+        return null;
     }
   };
-  
+
   const getMissionTypeName = (type: string) => {
     switch (type) {
-      case 'quiz':
-        return "Quiz";
-      case 'task':
-        return "Tarefa";
-      case 'activity':
+      case "multipla_escolha":
+        return "Pergunta de Múltipla Escolha";
+      case "atividade":
         return "Atividade";
+      case "tarefa":
+        return "Tarefa";
       default:
         return type;
     }
   };
 
+  const filteredMissions = missions.filter(mission => 
+    mission.titulo.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    mission.descricao.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <>
       <div className="flex justify-between items-center">
         <div className="flex-1" />
-        <Dialog open={isCreatingMission} onOpenChange={setIsCreatingMission}>
+        <Dialog open={openDialog} onOpenChange={setOpenDialog}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
               Nova Missão
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[550px]">
+          <DialogContent className="max-w-3xl">
             <DialogHeader>
               <DialogTitle>Criar Nova Missão</DialogTitle>
               <DialogDescription>
-                Preencha os detalhes da missão que deseja criar.
+                Adicione uma nova missão para os usuários completarem e ganharem pontos.
               </DialogDescription>
             </DialogHeader>
             
-            <div className="space-y-4 py-4 max-h-[70vh] overflow-y-auto">
-              <div className="space-y-2">
-                <Label htmlFor="titulo">Título</Label>
-                <Input 
-                  id="titulo" 
-                  name="titulo"
-                  value={newMission.titulo}
-                  onChange={handleInputChange}
-                  placeholder="Digite o título da missão"
-                />
+            <div className="space-y-4 py-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="titulo">Título da Missão</Label>
+                  <Input 
+                    id="titulo" 
+                    value={newMission.titulo}
+                    onChange={(e) => setNewMission({...newMission, titulo: e.target.value})}
+                    placeholder="Digite o título da missão"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="tipo">Tipo de Missão</Label>
+                  <Select 
+                    value={newMission.tipo} 
+                    onValueChange={(value) => setNewMission({...newMission, tipo: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="multipla_escolha">
+                        <div className="flex items-center">
+                          <HelpCircle className="h-4 w-4 mr-2" />
+                          <span>Pergunta de Múltipla Escolha</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="atividade">
+                        <div className="flex items-center">
+                          <Activity className="h-4 w-4 mr-2" />
+                          <span>Atividade</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="tarefa">
+                        <div className="flex items-center">
+                          <ListChecks className="h-4 w-4 mr-2" />
+                          <span>Tarefa</span>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               
               <div className="space-y-2">
                 <Label htmlFor="descricao">Descrição</Label>
                 <Textarea 
                   id="descricao" 
-                  name="descricao"
-                  value={newMission.descricao}
-                  onChange={handleInputChange}
-                  placeholder="Digite uma descrição detalhada da missão"
                   rows={3}
+                  value={newMission.descricao}
+                  onChange={(e) => setNewMission({...newMission, descricao: e.target.value})}
+                  placeholder="Descreva detalhadamente o que o usuário deve fazer"
                 />
               </div>
               
-              <div className="space-y-2">
-                <Label htmlFor="tipo">Tipo de Missão</Label>
-                <Select 
-                  value={newMission.tipo} 
-                  onValueChange={handleTypeChange}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o tipo de missão" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="quiz">
-                      <div className="flex items-center">
-                        <HelpCircle className="h-4 w-4 mr-2" />
-                        <span>Quiz (Pergunta e Resposta)</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="task">
-                      <div className="flex items-center">
-                        <ListTodo className="h-4 w-4 mr-2" />
-                        <span>Tarefa</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="activity">
-                      <div className="flex items-center">
-                        <Target className="h-4 w-4 mr-2" />
-                        <span>Atividade</span>
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="pontos">Pontos</Label>
-                <Input 
-                  id="pontos" 
-                  name="pontos"
-                  type="number"
-                  value={newMission.pontos}
-                  onChange={handleNumberChange}
-                  min={1}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="grupo">Grupo de Usuários</Label>
-                <Select 
-                  value={newMission.grupo_id || "none"} 
-                  onValueChange={handleGroupChange}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o grupo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Todos os usuários</SelectItem>
-                    {groups.map(group => (
-                      <SelectItem key={group.id} value={group.id}>
-                        {group.nome}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="imagem">Imagem (Opcional)</Label>
-                <Input 
-                  id="imagem"
-                  type="file"
-                  onChange={handleFileChange}
-                  disabled={uploadingImage}
-                  accept="image/*"
-                />
-                {uploadingImage && (
-                  <div className="flex items-center mt-2">
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    <span className="text-sm">Enviando imagem...</span>
-                  </div>
-                )}
-                {newMission.imagem_url && (
-                  <div className="mt-2">
-                    <AspectRatio ratio={16 / 9}>
-                      <img 
-                        src={newMission.imagem_url} 
-                        alt="Preview da imagem" 
-                        className="rounded-md object-cover w-full h-full"
-                      />
-                    </AspectRatio>
-                  </div>
-                )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="pontos">Pontos</Label>
+                  <Input 
+                    id="pontos" 
+                    type="number"
+                    min={1}
+                    value={newMission.pontos}
+                    onChange={(e) => setNewMission({...newMission, pontos: parseInt(e.target.value)})}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Quantidade de pontos que o usuário ganhará ao completar essa missão
+                  </p>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="imagem">URL da Imagem (opcional)</Label>
+                  <Input 
+                    id="imagem" 
+                    value={newMission.imagem_url || ""}
+                    onChange={(e) => setNewMission({...newMission, imagem_url: e.target.value})}
+                    placeholder="https://exemplo.com/imagem.jpg"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Adicione uma imagem ilustrativa para a missão
+                  </p>
+                </div>
               </div>
               
               <div className="flex items-center space-x-2">
                 <Switch 
-                  id="ativo"
-                  checked={newMission.ativo}
-                  onCheckedChange={(checked) => handleSwitchChange(checked, 'ativo')}
+                  id="evidencia"
+                  checked={newMission.evidencia_obrigatoria} 
+                  onCheckedChange={(checked) => setNewMission({...newMission, evidencia_obrigatoria: checked})}
                 />
-                <Label htmlFor="ativo">Missão ativa</Label>
+                <Label htmlFor="evidencia">Exigir evidência para conclusão</Label>
               </div>
               
-              {/* Campos específicos para Quiz */}
-              {newMission.tipo === 'quiz' && (
+              {newMission.tipo === "multipla_escolha" && (
                 <div className="space-y-4 border p-4 rounded-md">
-                  <h4 className="font-semibold flex items-center">
-                    <HelpCircle className="h-4 w-4 mr-2" />
-                    Configurar Quiz
-                  </h4>
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-medium">Opções de Resposta</h4>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm"
+                      onClick={handleAddOption}
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Adicionar Opção
+                    </Button>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    {options.map((option, index) => (
+                      <div key={index} className="flex items-center space-x-2">
+                        <Input 
+                          value={option.text}
+                          onChange={(e) => handleOptionChange(index, e.target.value)}
+                          placeholder={`Opção ${index + 1}`}
+                        />
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={() => handleRemoveOption(index)}
+                          disabled={options.length <= 2}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
                   
                   <div className="space-y-2">
-                    <Label>Opções de Resposta</Label>
-                    <div className="flex space-x-2">
-                      <Input 
-                        value={newOption}
-                        onChange={(e) => setNewOption(e.target.value)}
-                        placeholder="Digite uma opção"
-                      />
-                      <Button type="button" onClick={handleAddOption} variant="outline">
-                        Adicionar
-                      </Button>
-                    </div>
-                    
-                    {newMission.opcoes && newMission.opcoes.length > 0 ? (
-                      <div className="space-y-2 mt-2">
-                        <Label>Resposta Correta</Label>
-                        <Select 
-                          value={newMission.resposta_correta || ""} 
-                          onValueChange={handleSetCorrectAnswer}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione a resposta correta" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {newMission.opcoes.map((option, index) => (
-                              <SelectItem key={index} value={option.value}>
-                                {option.text}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        
-                        <div className="mt-2">
-                          <Label>Lista de Opções</Label>
-                          <div className="mt-1 space-y-1">
-                            {newMission.opcoes.map((option, index) => (
-                              <div key={index} className="flex items-center justify-between p-2 bg-muted rounded">
-                                <div className="flex items-center space-x-2">
-                                  {option.value === newMission.resposta_correta && (
-                                    <Check className="h-4 w-4 text-green-500" />
-                                  )}
-                                  <span>{option.text}</span>
-                                </div>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  onClick={() => handleRemoveOption(index)}
-                                >
-                                  <Trash2 className="h-4 w-4 text-destructive" />
-                                </Button>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground mt-2">
-                        Adicione opções de resposta para o quiz.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-              
-              {/* Campos específicos para Task e Activity */}
-              {(newMission.tipo === 'task' || newMission.tipo === 'activity') && (
-                <div className="space-y-4 border p-4 rounded-md">
-                  <h4 className="font-semibold flex items-center">
-                    {getMissionTypeIcon(newMission.tipo)}
-                    <span className="ml-2">Configurar {getMissionTypeName(newMission.tipo)}</span>
-                  </h4>
-                  
-                  <div className="flex items-center space-x-2">
-                    <Switch 
-                      id="evidencia"
-                      checked={newMission.evidencia_obrigatoria}
-                      onCheckedChange={(checked) => handleSwitchChange(checked, 'evidencia_obrigatoria')}
-                    />
-                    <Label htmlFor="evidencia">Exigir evidência para concluir</Label>
+                    <Label htmlFor="resposta_correta">Resposta Correta</Label>
+                    <Select 
+                      value={newMission.resposta_correta || ""} 
+                      onValueChange={(value) => setNewMission({...newMission, resposta_correta: value})}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a resposta correta" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {options.map((option, index) => (
+                          <SelectItem key={index} value={option.value}>
+                            {option.text}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               )}
             </div>
             
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsCreatingMission(false)}>
-                Cancelar
-              </Button>
-              <Button onClick={handleCreateMission}>
-                Criar Missão
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-        
-        {/* Dialog de edição */}
-        <Dialog open={isEditingMission} onOpenChange={setIsEditingMission}>
-          <DialogContent className="sm:max-w-[550px]">
-            <DialogHeader>
-              <DialogTitle>Editar Missão</DialogTitle>
-              <DialogDescription>
-                Altere os detalhes da missão.
-              </DialogDescription>
-            </DialogHeader>
-            
-            <div className="space-y-4 py-4 max-h-[70vh] overflow-y-auto">
-              {/* Mesmo conteúdo do dialog de criação */}
-              <div className="space-y-2">
-                <Label htmlFor="edit-titulo">Título</Label>
-                <Input 
-                  id="edit-titulo" 
-                  name="titulo"
-                  value={newMission.titulo}
-                  onChange={handleInputChange}
-                  placeholder="Digite o título da missão"
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="edit-descricao">Descrição</Label>
-                <Textarea 
-                  id="edit-descricao" 
-                  name="descricao"
-                  value={newMission.descricao}
-                  onChange={handleInputChange}
-                  placeholder="Digite uma descrição detalhada da missão"
-                  rows={3}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="edit-tipo">Tipo de Missão</Label>
-                <Select 
-                  value={newMission.tipo} 
-                  onValueChange={handleTypeChange}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o tipo de missão" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="quiz">
-                      <div className="flex items-center">
-                        <HelpCircle className="h-4 w-4 mr-2" />
-                        <span>Quiz (Pergunta e Resposta)</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="task">
-                      <div className="flex items-center">
-                        <ListTodo className="h-4 w-4 mr-2" />
-                        <span>Tarefa</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="activity">
-                      <div className="flex items-center">
-                        <Target className="h-4 w-4 mr-2" />
-                        <span>Atividade</span>
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="edit-pontos">Pontos</Label>
-                <Input 
-                  id="edit-pontos" 
-                  name="pontos"
-                  type="number"
-                  value={newMission.pontos}
-                  onChange={handleNumberChange}
-                  min={1}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="edit-grupo">Grupo de Usuários</Label>
-                <Select 
-                  value={newMission.grupo_id || "none"} 
-                  onValueChange={handleGroupChange}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o grupo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Todos os usuários</SelectItem>
-                    {groups.map(group => (
-                      <SelectItem key={group.id} value={group.id}>
-                        {group.nome}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="edit-imagem">Imagem (Opcional)</Label>
-                <Input 
-                  id="edit-imagem"
-                  type="file"
-                  onChange={handleFileChange}
-                  disabled={uploadingImage}
-                  accept="image/*"
-                />
-                {uploadingImage && (
-                  <div className="flex items-center mt-2">
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    <span className="text-sm">Enviando imagem...</span>
-                  </div>
-                )}
-                {newMission.imagem_url && (
-                  <div className="mt-2">
-                    <AspectRatio ratio={16 / 9}>
-                      <img 
-                        src={newMission.imagem_url} 
-                        alt="Preview da imagem" 
-                        className="rounded-md object-cover w-full h-full"
-                      />
-                    </AspectRatio>
-                  </div>
-                )}
-              </div>
-              
-              <div className="flex items-center space-x-2">
-                <Switch 
-                  id="edit-ativo"
-                  checked={newMission.ativo}
-                  onCheckedChange={(checked) => handleSwitchChange(checked, 'ativo')}
-                />
-                <Label htmlFor="edit-ativo">Missão ativa</Label>
-              </div>
-              
-              {/* Campos específicos para Quiz */}
-              {newMission.tipo === 'quiz' && (
-                <div className="space-y-4 border p-4 rounded-md">
-                  <h4 className="font-semibold flex items-center">
-                    <HelpCircle className="h-4 w-4 mr-2" />
-                    Configurar Quiz
-                  </h4>
-                  
-                  <div className="space-y-2">
-                    <Label>Opções de Resposta</Label>
-                    <div className="flex space-x-2">
-                      <Input 
-                        value={newOption}
-                        onChange={(e) => setNewOption(e.target.value)}
-                        placeholder="Digite uma opção"
-                      />
-                      <Button type="button" onClick={handleAddOption} variant="outline">
-                        Adicionar
-                      </Button>
-                    </div>
-                    
-                    {newMission.opcoes && newMission.opcoes.length > 0 ? (
-                      <div className="space-y-2 mt-2">
-                        <Label>Resposta Correta</Label>
-                        <Select 
-                          value={newMission.resposta_correta || ""} 
-                          onValueChange={handleSetCorrectAnswer}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione a resposta correta" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {newMission.opcoes.map((option, index) => (
-                              <SelectItem key={index} value={option.value}>
-                                {option.text}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        
-                        <div className="mt-2">
-                          <Label>Lista de Opções</Label>
-                          <div className="mt-1 space-y-1">
-                            {newMission.opcoes.map((option, index) => (
-                              <div key={index} className="flex items-center justify-between p-2 bg-muted rounded">
-                                <div className="flex items-center space-x-2">
-                                  {option.value === newMission.resposta_correta && (
-                                    <Check className="h-4 w-4 text-green-500" />
-                                  )}
-                                  <span>{option.text}</span>
-                                </div>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  onClick={() => handleRemoveOption(index)}
-                                >
-                                  <Trash2 className="h-4 w-4 text-destructive" />
-                                </Button>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground mt-2">
-                        Adicione opções de resposta para o quiz.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-              
-              {/* Campos específicos para Task e Activity */}
-              {(newMission.tipo === 'task' || newMission.tipo === 'activity') && (
-                <div className="space-y-4 border p-4 rounded-md">
-                  <h4 className="font-semibold flex items-center">
-                    {getMissionTypeIcon(newMission.tipo)}
-                    <span className="ml-2">Configurar {getMissionTypeName(newMission.tipo)}</span>
-                  </h4>
-                  
-                  <div className="flex items-center space-x-2">
-                    <Switch 
-                      id="edit-evidencia"
-                      checked={newMission.evidencia_obrigatoria}
-                      onCheckedChange={(checked) => handleSwitchChange(checked, 'evidencia_obrigatoria')}
-                    />
-                    <Label htmlFor="edit-evidencia">Exigir evidência para concluir</Label>
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            <DialogFooter>
-              <Button variant="outline" onClick={() => {
-                setIsEditingMission(false);
-                setSelectedMission(null);
-              }}>
-                Cancelar
-              </Button>
-              <Button onClick={handleUpdateMission}>
-                Salvar Alterações
+              <Button variant="outline" onClick={() => setOpenDialog(false)}>Cancelar</Button>
+              <Button onClick={handleAddMission} disabled={isLoading}>
+                {isLoading ? "Salvando..." : "Confirmar"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -908,91 +484,78 @@ export const MissionManagement = () => {
       
       <Card className="mt-4">
         <CardHeader>
-          <CardTitle>Missões</CardTitle>
+          <div className="flex justify-between items-center">
+            <CardTitle>Lista de Missões</CardTitle>
+            <div className="relative w-64">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar missões"
+                className="pl-10"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+          </div>
           <CardDescription>
-            Gerencie as missões disponíveis no sistema
+            Total de {filteredMissions.length} missões cadastradas no sistema
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
-            <div className="flex items-center justify-center py-10">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <span className="ml-2">Carregando missões...</span>
-            </div>
-          ) : missions.length > 0 ? (
+          <div className="rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Status</TableHead>
                   <TableHead>Título</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Pontos</TableHead>
-                  <TableHead>Grupo</TableHead>
+                  <TableHead>Evidência</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {missions.map((mission) => (
-                  <TableRow key={mission.id}>
-                    <TableCell>
-                      <Switch 
-                        checked={mission.ativo}
-                        onCheckedChange={() => handleToggleActive(mission.id, mission.ativo)}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <div className="font-medium">{mission.titulo}</div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center space-x-2">
-                        {getMissionTypeIcon(mission.tipo)}
-                        <span>{getMissionTypeName(mission.tipo)}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center space-x-1">
-                        <Award className="h-4 w-4 text-yellow-500" />
-                        <span>{mission.pontos}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {mission.grupo_id ? 
-                        groups.find(g => g.id === mission.grupo_id)?.nome || "N/A" : 
-                        "Todos"
-                      }
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end space-x-2">
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => handleEditMission(mission)}
-                        >
-                          <Edit className="h-4 w-4" />
+                {filteredMissions.length > 0 ? (
+                  filteredMissions.map((mission) => (
+                    <TableRow key={mission.id}>
+                      <TableCell className="font-medium">{mission.titulo}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center space-x-2">
+                          {getMissionTypeIcon(mission.tipo)}
+                          <span>{getMissionTypeName(mission.tipo)}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>{mission.pontos} pts</TableCell>
+                      <TableCell>
+                        {mission.evidencia_obrigatoria ? "Obrigatória" : "Não obrigatória"}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center space-x-2">
+                          <Switch 
+                            checked={mission.ativo} 
+                            onCheckedChange={() => mission.id && handleToggleStatus(mission.id, mission.ativo)} 
+                          />
+                          <span>{mission.ativo ? "Ativa" : "Inativa"}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="outline" size="sm" onClick={() => mission.id && handleToggleStatus(mission.id, mission.ativo)}>
+                          {mission.ativo ? "Desativar" : "Ativar"}
                         </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => handleDeleteMission(mission.id)}
-                          className="text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
+                      {searchTerm 
+                        ? "Nenhuma missão encontrada com estes termos de busca." 
+                        : "Nenhuma missão cadastrada no sistema."}
                     </TableCell>
                   </TableRow>
-                ))}
+                )}
               </TableBody>
             </Table>
-          ) : (
-            <div className="text-center py-10 text-muted-foreground">
-              <Target className="h-12 w-12 mx-auto mb-2 opacity-30" />
-              <p>Nenhuma missão cadastrada</p>
-              <p className="text-sm mt-1">
-                Clique em "Nova Missão" para adicionar
-              </p>
-            </div>
-          )}
+          </div>
         </CardContent>
       </Card>
     </>

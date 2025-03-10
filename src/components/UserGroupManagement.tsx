@@ -3,81 +3,145 @@ import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Loader2, Plus, Trash2, Edit, UserPlus, Users, Check } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Plus, Search, Users, UserSquare, ListChecks, Package2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { Checkbox } from "@/components/ui/checkbox";
 
-interface UserGroup {
+interface User {
+  matricula: string;
+  nome: string;
+  id?: string;
+  grupo?: string;
+  grupo_id?: string;
+}
+
+interface Group {
   id: string;
   nome: string;
   descricao: string | null;
   data_criacao: string;
-  membros_count?: number;
+  usuario_count?: number;
 }
 
-interface User {
+interface Mission {
   id: string;
-  matricula: string;
+  titulo: string;
+}
+
+interface Product {
+  id: string;
   nome: string;
-  ativo: boolean;
-  grupo?: string;
 }
 
 export const UserGroupManagement = () => {
-  const [groups, setGroups] = useState<UserGroup[]>([]);
   const [users, setUsers] = useState<User[]>([]);
-  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
-  const [isEditingGroup, setIsEditingGroup] = useState(false);
-  const [isManagingMembers, setIsManagingMembers] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  
-  const [selectedGroup, setSelectedGroup] = useState<UserGroup | null>(null);
-  const [selectedGroupMembers, setSelectedGroupMembers] = useState<string[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [missions, setMissions] = useState<Mission[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
+  const [groupUsers, setGroupUsers] = useState<User[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [openDialog, setOpenDialog] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [newGroup, setNewGroup] = useState({
     nome: "",
-    descricao: ""
+    descricao: "",
+    selectedUsers: [] as string[],
+    selectedMissions: [] as string[],
+    selectedProducts: [] as string[]
   });
-  
   const { toast } = useToast();
-  
+
   useEffect(() => {
     loadGroups();
     loadUsers();
+    loadMissions();
+    loadProducts();
   }, []);
-  
-  const loadGroups = async () => {
-    setIsLoading(true);
+
+  useEffect(() => {
+    if (selectedGroupId) {
+      loadGroupDetails(selectedGroupId);
+      loadGroupUsers(selectedGroupId);
+    }
+  }, [selectedGroupId]);
+
+  const loadUsers = async () => {
     try {
-      // First get all groups
-      const { data: groupsData, error } = await supabase
+      const { data, error } = await supabase
+        .from('matriculas_funcionarios')
+        .select('id, nome, numero_matricula, grupo_id')
+        .order('nome');
+
+      if (error) {
+        throw error;
+      }
+
+      if (data) {
+        // Transform data to match our User interface
+        const transformedUsers: User[] = data.map(user => ({
+          id: user.id,
+          nome: user.nome,
+          matricula: user.numero_matricula,
+          grupo_id: user.grupo_id || undefined
+        }));
+        
+        setUsers(transformedUsers);
+      }
+    } catch (error) {
+      console.error("Erro ao carregar usuários:", error);
+      toast({
+        title: "Erro ao carregar usuários",
+        description: "Não foi possível carregar a lista de usuários.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const loadGroups = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Get all groups
+      const { data: groupsData, error: groupsError } = await supabase
         .from('grupos_usuarios')
         .select('*')
         .order('nome');
-      
-      if (error) throw error;
-      
-      // Now count members in each group
+
+      if (groupsError) {
+        throw groupsError;
+      }
+
       if (groupsData) {
-        const groupsWithCounts = await Promise.all(
+        // For each group, count the users
+        const groupsWithCount = await Promise.all(
           groupsData.map(async (group) => {
             const { count, error: countError } = await supabase
               .from('usuario_grupo')
               .select('*', { count: 'exact', head: true })
               .eq('grupo_id', group.id);
+              
+            if (countError) {
+              console.error("Erro ao contar usuários do grupo:", countError);
+              return { ...group, usuario_count: 0 };
+            }
             
-            return {
-              ...group,
-              membros_count: count || 0
-            };
+            return { ...group, usuario_count: count || 0 };
           })
         );
         
-        setGroups(groupsWithCounts);
+        setGroups(groupsWithCount);
+        
+        // Select the first group by default if there's no selection
+        if (groupsWithCount.length > 0 && !selectedGroupId) {
+          setSelectedGroupId(groupsWithCount[0].id);
+        }
       }
     } catch (error) {
       console.error("Erro ao carregar grupos:", error);
@@ -90,543 +154,643 @@ export const UserGroupManagement = () => {
       setIsLoading(false);
     }
   };
-  
-  const loadUsers = async () => {
+
+  const loadMissions = async () => {
     try {
       const { data, error } = await supabase
-        .from('matriculas_funcionarios')
-        .select('*')
-        .order('nome');
-      
-      if (error) throw error;
-      
-      // For each user, check if they belong to a group
-      if (data) {
-        const usersWithGroups = await Promise.all(
-          data.map(async (user) => {
-            const { data: userGroupData, error: userGroupError } = await supabase
-              .from('usuario_grupo')
-              .select('grupo_id')
-              .eq('matricula', user.numero_matricula)
-              .single();
-            
-            if (userGroupData) {
-              // Get group name
-              const { data: groupData } = await supabase
-                .from('grupos_usuarios')
-                .select('nome')
-                .eq('id', userGroupData.grupo_id)
-                .single();
-              
-              return {
-                ...user,
-                grupo: groupData?.nome || 'Sem grupo'
-              };
-            }
-            
-            return {
-              ...user,
-              grupo: 'Sem grupo'
-            };
-          })
-        );
-        
-        setUsers(usersWithGroups);
+        .from('missoes')
+        .select('id, titulo')
+        .order('titulo');
+
+      if (error) {
+        throw error;
       }
+
+      setMissions(data || []);
     } catch (error) {
-      console.error("Erro ao carregar usuários:", error);
+      console.error("Erro ao carregar missões:", error);
     }
   };
-  
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setNewGroup({
-      ...newGroup,
-      [name]: value,
-    });
+
+  const loadProducts = async () => {
+    try {
+      // If you have a products table:
+      // const { data, error } = await supabase
+      //   .from('produtos')
+      //   .select('id, nome')
+      //   .order('nome');
+      
+      // For demonstration, using mock data
+      setProducts([
+        { id: "produto1", nome: "Produto 1" },
+        { id: "produto2", nome: "Produto 2" },
+        { id: "produto3", nome: "Produto 3" },
+      ]);
+    } catch (error) {
+      console.error("Erro ao carregar produtos:", error);
+    }
   };
-  
-  const handleCreateGroup = async () => {
+
+  const loadGroupDetails = async (groupId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('grupos_usuarios')
+        .select('*')
+        .eq('id', groupId)
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      setSelectedGroup(data);
+    } catch (error) {
+      console.error("Erro ao carregar detalhes do grupo:", error);
+    }
+  };
+
+  const loadGroupUsers = async (groupId: string) => {
+    try {
+      // Get users in this group
+      const { data, error } = await supabase
+        .from('usuario_grupo')
+        .select('matricula')
+        .eq('grupo_id', groupId);
+
+      if (error) {
+        throw error;
+      }
+
+      if (data) {
+        // Get full user details for these matriculas
+        const matriculas = data.map(item => item.matricula);
+        
+        if (matriculas.length > 0) {
+          const { data: userData, error: userError } = await supabase
+            .from('matriculas_funcionarios')
+            .select('*')
+            .in('numero_matricula', matriculas);
+            
+          if (userError) {
+            throw userError;
+          }
+          
+          // Transform data to include group information
+          const userList = userData.map(user => ({
+            id: user.id,
+            nome: user.nome,
+            matricula: user.numero_matricula,
+            grupo: selectedGroup?.nome || "",
+            grupo_id: selectedGroup?.id
+          }));
+          
+          setGroupUsers(userList);
+        } else {
+          setGroupUsers([]);
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao carregar usuários do grupo:", error);
+    }
+  };
+
+  const handleAddGroup = async () => {
     if (!newGroup.nome) {
       toast({
         title: "Campo obrigatório",
-        description: "Por favor, informe o nome do grupo.",
+        description: "O nome do grupo é obrigatório.",
         variant: "destructive",
       });
       return;
     }
-    
+
     try {
-      const { data, error } = await supabase
+      setIsLoading(true);
+      
+      // 1. Insert the new group
+      const { data: groupData, error: groupError } = await supabase
         .from('grupos_usuarios')
         .insert([{
           nome: newGroup.nome,
           descricao: newGroup.descricao || null
         }])
         .select();
+
+      if (groupError) {
+        throw groupError;
+      }
       
-      if (error) throw error;
+      const newGroupId = groupData[0].id;
       
+      // 2. Add selected users to the group
+      if (newGroup.selectedUsers.length > 0) {
+        const userGroupEntries = newGroup.selectedUsers.map(matricula => ({
+          grupo_id: newGroupId,
+          matricula
+        }));
+        
+        const { error: userGroupError } = await supabase
+          .from('usuario_grupo')
+          .insert(userGroupEntries);
+          
+        if (userGroupError) {
+          throw userGroupError;
+        }
+      }
+      
+      // 3. Add selected missions to the group
+      if (newGroup.selectedMissions.length > 0) {
+        const missionGroupEntries = newGroup.selectedMissions.map(missionId => ({
+          grupo_id: newGroupId,
+          missao_id: missionId
+        }));
+        
+        const { error: missionGroupError } = await supabase
+          .from('missao_grupo')
+          .insert(missionGroupEntries);
+          
+        if (missionGroupError) {
+          throw missionGroupError;
+        }
+      }
+      
+      // 4. Add selected products to the group
+      if (newGroup.selectedProducts.length > 0) {
+        const productGroupEntries = newGroup.selectedProducts.map(productId => ({
+          grupo_id: newGroupId,
+          premio_id: productId
+        }));
+        
+        const { error: productGroupError } = await supabase
+          .from('premio_grupo')
+          .insert(productGroupEntries);
+          
+        if (productGroupError) {
+          throw productGroupError;
+        }
+      }
+
       toast({
-        title: "Grupo criado com sucesso",
-        description: "O grupo de usuários foi adicionado ao sistema.",
+        title: "Grupo criado",
+        description: `O grupo "${newGroup.nome}" foi criado com sucesso.`,
       });
       
-      setIsCreatingGroup(false);
+      // Reset form and reload data
       setNewGroup({
         nome: "",
-        descricao: ""
+        descricao: "",
+        selectedUsers: [],
+        selectedMissions: [],
+        selectedProducts: []
       });
       
-      // Reload groups
+      setOpenDialog(false);
       loadGroups();
+      
+      // Select the newly created group
+      setSelectedGroupId(newGroupId);
+      
     } catch (error) {
       console.error("Erro ao criar grupo:", error);
       toast({
         title: "Erro ao criar grupo",
-        description: "Não foi possível criar o grupo de usuários.",
+        description: "Não foi possível criar o grupo.",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
-  
-  const handleEditGroup = (group: UserGroup) => {
-    setSelectedGroup(group);
-    setNewGroup({
-      nome: group.nome,
-      descricao: group.descricao || ""
-    });
-    setIsEditingGroup(true);
-  };
-  
-  const handleUpdateGroup = async () => {
-    if (!selectedGroup || !newGroup.nome) {
-      toast({
-        title: "Campo obrigatório",
-        description: "Por favor, informe o nome do grupo.",
-        variant: "destructive",
-      });
-      return;
+
+  const handleAddUserToGroup = async () => {
+    if (!selectedGroupId) return;
+    
+    try {
+      // Open a dialog to select users to add to the group
+      // This functionality would be implemented separately
+    } catch (error) {
+      console.error("Erro ao adicionar usuário ao grupo:", error);
     }
+  };
+
+  const handleRemoveUserFromGroup = async (matricula: string) => {
+    if (!selectedGroupId) return;
     
     try {
       const { error } = await supabase
-        .from('grupos_usuarios')
-        .update({
-          nome: newGroup.nome,
-          descricao: newGroup.descricao || null
-        })
-        .eq('id', selectedGroup.id);
-      
-      if (error) throw error;
-      
-      toast({
-        title: "Grupo atualizado com sucesso",
-        description: "As alterações foram salvas.",
-      });
-      
-      setIsEditingGroup(false);
-      setSelectedGroup(null);
-      
-      // Reload groups
-      loadGroups();
-    } catch (error) {
-      console.error("Erro ao atualizar grupo:", error);
-      toast({
-        title: "Erro ao atualizar grupo",
-        description: "Não foi possível atualizar o grupo de usuários.",
-        variant: "destructive",
-      });
-    }
-  };
-  
-  const handleDeleteGroup = async (id: string) => {
-    if (confirm("Tem certeza que deseja excluir este grupo? Os usuários ficarão sem grupo.")) {
-      try {
-        // First, remove all relationships
-        await supabase
-          .from('usuario_grupo')
-          .delete()
-          .eq('grupo_id', id);
-          
-        // Then, delete the group
-        const { error } = await supabase
-          .from('grupos_usuarios')
-          .delete()
-          .eq('id', id);
-        
-        if (error) throw error;
-        
-        toast({
-          title: "Grupo excluído",
-          description: "O grupo foi removido com sucesso.",
-        });
-        
-        // Update the groups list
-        setGroups(groups.filter(g => g.id !== id));
-      } catch (error) {
-        console.error("Erro ao excluir grupo:", error);
-        toast({
-          title: "Erro ao excluir grupo",
-          description: "Não foi possível excluir o grupo.",
-          variant: "destructive",
-        });
-      }
-    }
-  };
-  
-  const handleManageMembers = async (group: UserGroup) => {
-    setSelectedGroup(group);
-    
-    try {
-      // Get current members of the group
-      const { data, error } = await supabase
-        .from('usuario_grupo')
-        .select('matricula')
-        .eq('grupo_id', group.id);
-      
-      if (error) throw error;
-      
-      setSelectedGroupMembers(data?.map(item => item.matricula) || []);
-      setIsManagingMembers(true);
-    } catch (error) {
-      console.error("Erro ao carregar membros do grupo:", error);
-      toast({
-        title: "Erro ao carregar membros",
-        description: "Não foi possível carregar os membros do grupo.",
-        variant: "destructive",
-      });
-    }
-  };
-  
-  const toggleUserSelection = (matricula: string) => {
-    if (selectedGroupMembers.includes(matricula)) {
-      setSelectedGroupMembers(selectedGroupMembers.filter(m => m !== matricula));
-    } else {
-      setSelectedGroupMembers([...selectedGroupMembers, matricula]);
-    }
-  };
-  
-  const handleSaveMembers = async () => {
-    if (!selectedGroup) return;
-    
-    try {
-      // First, remove all current members
-      await supabase
         .from('usuario_grupo')
         .delete()
-        .eq('grupo_id', selectedGroup.id);
-      
-      // If we have selected members, add them
-      if (selectedGroupMembers.length > 0) {
-        const membersToInsert = selectedGroupMembers.map(matricula => ({
-          grupo_id: selectedGroup.id,
-          matricula
-        }));
-        
-        const { error } = await supabase
-          .from('usuario_grupo')
-          .insert(membersToInsert);
-        
-        if (error) throw error;
+        .eq('grupo_id', selectedGroupId)
+        .eq('matricula', matricula);
+
+      if (error) {
+        throw error;
       }
-      
+
       toast({
-        title: "Membros atualizados",
-        description: "Os membros do grupo foram atualizados com sucesso.",
+        title: "Usuário removido",
+        description: `O usuário foi removido do grupo com sucesso.`,
       });
       
-      setIsManagingMembers(false);
-      setSelectedGroup(null);
-      setSelectedGroupMembers([]);
-      
-      // Reload data
-      loadGroups();
-      loadUsers();
+      loadGroupUsers(selectedGroupId);
     } catch (error) {
-      console.error("Erro ao salvar membros:", error);
+      console.error("Erro ao remover usuário do grupo:", error);
       toast({
-        title: "Erro ao salvar membros",
-        description: "Não foi possível atualizar os membros do grupo.",
+        title: "Erro ao remover usuário",
+        description: "Não foi possível remover o usuário do grupo.",
         variant: "destructive",
       });
     }
   };
 
+  const filteredUsers = groupUsers.filter(user => 
+    user.nome.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    user.matricula.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <>
       <div className="flex justify-between items-center">
-        <div className="flex-1" />
-        <Dialog open={isCreatingGroup} onOpenChange={setIsCreatingGroup}>
+        <div>
+          <Select 
+            value={selectedGroupId || ""} 
+            onValueChange={(value) => setSelectedGroupId(value)}
+          >
+            <SelectTrigger className="w-[250px]">
+              <SelectValue placeholder="Selecione um grupo" />
+            </SelectTrigger>
+            <SelectContent>
+              {groups.map((group) => (
+                <SelectItem key={group.id} value={group.id}>
+                  <div className="flex items-center gap-2">
+                    <UserSquare className="h-4 w-4" />
+                    <span>{group.nome}</span>
+                    <span className="text-muted-foreground text-xs">
+                      ({group.usuario_count} usuários)
+                    </span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        
+        <Dialog open={openDialog} onOpenChange={setOpenDialog}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
               Novo Grupo
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-3xl">
             <DialogHeader>
               <DialogTitle>Criar Novo Grupo</DialogTitle>
               <DialogDescription>
-                Crie um grupo para organizar usuários e atribuir missões específicas.
+                Crie um novo grupo e selecione os usuários, missões e produtos associados.
               </DialogDescription>
             </DialogHeader>
             
             <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="nome">Nome do Grupo</Label>
-                <Input 
-                  id="nome" 
-                  name="nome"
-                  value={newGroup.nome}
-                  onChange={handleInputChange}
-                  placeholder="Digite o nome do grupo"
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="descricao">Descrição (Opcional)</Label>
-                <Textarea 
-                  id="descricao" 
-                  name="descricao"
-                  value={newGroup.descricao}
-                  onChange={handleInputChange}
-                  placeholder="Digite uma descrição para o grupo"
-                  rows={3}
-                />
-              </div>
-            </div>
-            
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsCreatingGroup(false)}>
-                Cancelar
-              </Button>
-              <Button onClick={handleCreateGroup}>
-                Criar Grupo
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-        
-        {/* Dialog de edição */}
-        <Dialog open={isEditingGroup} onOpenChange={setIsEditingGroup}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Editar Grupo</DialogTitle>
-              <DialogDescription>
-                Altere as informações do grupo selecionado.
-              </DialogDescription>
-            </DialogHeader>
-            
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-nome">Nome do Grupo</Label>
-                <Input 
-                  id="edit-nome" 
-                  name="nome"
-                  value={newGroup.nome}
-                  onChange={handleInputChange}
-                  placeholder="Digite o nome do grupo"
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="edit-descricao">Descrição (Opcional)</Label>
-                <Textarea 
-                  id="edit-descricao" 
-                  name="descricao"
-                  value={newGroup.descricao}
-                  onChange={handleInputChange}
-                  placeholder="Digite uma descrição para o grupo"
-                  rows={3}
-                />
-              </div>
-            </div>
-            
-            <DialogFooter>
-              <Button variant="outline" onClick={() => {
-                setIsEditingGroup(false);
-                setSelectedGroup(null);
-              }}>
-                Cancelar
-              </Button>
-              <Button onClick={handleUpdateGroup}>
-                Salvar Alterações
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-        
-        {/* Dialog para gerenciar membros */}
-        <Dialog open={isManagingMembers} onOpenChange={setIsManagingMembers}>
-          <DialogContent className="sm:max-w-[600px]">
-            <DialogHeader>
-              <DialogTitle>Gerenciar Membros do Grupo</DialogTitle>
-              <DialogDescription>
-                {selectedGroup && `Selecione os usuários que farão parte do grupo "${selectedGroup.nome}"`}
-              </DialogDescription>
-            </DialogHeader>
-            
-            <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
-              <div className="space-y-2">
-                <h4 className="font-medium">Usuários Disponíveis</h4>
-                <div className="border rounded-md">
-                  {users.length > 0 ? (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-[50px]">Selecionar</TableHead>
-                          <TableHead>Usuário</TableHead>
-                          <TableHead>Matrícula</TableHead>
-                          <TableHead>Grupo Atual</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {users.map((user) => (
-                          <TableRow key={user.id}>
-                            <TableCell>
-                              <Checkbox
-                                checked={selectedGroupMembers.includes(user.matricula)}
-                                onCheckedChange={() => toggleUserSelection(user.matricula)}
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <div className="font-medium">{user.nome}</div>
-                            </TableCell>
-                            <TableCell>{user.matricula}</TableCell>
-                            <TableCell>{user.grupo}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  ) : (
-                    <div className="p-4 text-center text-muted-foreground">
-                      Nenhum usuário encontrado.
-                    </div>
-                  )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="nome">Nome do Grupo</Label>
+                  <Input 
+                    id="nome" 
+                    value={newGroup.nome}
+                    onChange={(e) => setNewGroup({...newGroup, nome: e.target.value})}
+                    placeholder="Digite o nome do grupo"
+                  />
                 </div>
               </div>
               
               <div className="space-y-2">
-                <h4 className="font-medium">Usuários Selecionados: {selectedGroupMembers.length}</h4>
-                {selectedGroupMembers.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {selectedGroupMembers.map(matricula => {
-                      const user = users.find(u => u.matricula === matricula);
-                      return (
-                        <div key={matricula} className="flex items-center bg-primary/10 text-primary rounded-full px-3 py-1">
-                          <span className="text-sm">{user?.nome || matricula}</span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="ml-1 h-5 w-5"
-                            onClick={() => toggleUserSelection(matricula)}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      );
-                    })}
+                <Label htmlFor="descricao">Descrição</Label>
+                <Textarea 
+                  id="descricao" 
+                  rows={2}
+                  value={newGroup.descricao}
+                  onChange={(e) => setNewGroup({...newGroup, descricao: e.target.value})}
+                  placeholder="Descrição breve sobre o grupo"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="usuarios">Selecionar Usuários</Label>
+                <Select 
+                  value="placeholder"
+                  onValueChange={(value) => {
+                    if (value !== "placeholder" && !newGroup.selectedUsers.includes(value)) {
+                      setNewGroup({
+                        ...newGroup, 
+                        selectedUsers: [...newGroup.selectedUsers, value]
+                      });
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione usuários para adicionar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="placeholder" disabled>
+                      Selecione usuários para adicionar
+                    </SelectItem>
+                    {users
+                      .filter(user => !newGroup.selectedUsers.includes(user.matricula))
+                      .map((user) => (
+                        <SelectItem key={user.matricula} value={user.matricula}>
+                          {user.nome} ({user.matricula})
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                
+                {newGroup.selectedUsers.length > 0 && (
+                  <div className="mt-2 space-y-2">
+                    <Label>Usuários selecionados:</Label>
+                    <div className="border rounded-md p-2 max-h-32 overflow-y-auto">
+                      <ul className="space-y-1">
+                        {newGroup.selectedUsers.map((matricula) => {
+                          const user = users.find(u => u.matricula === matricula);
+                          return (
+                            <li key={matricula} className="flex justify-between items-center text-sm">
+                              <span>{user?.nome} ({matricula})</span>
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => {
+                                  setNewGroup({
+                                    ...newGroup,
+                                    selectedUsers: newGroup.selectedUsers.filter(m => m !== matricula)
+                                  });
+                                }}
+                              >
+                                Remover
+                              </Button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="missoes">Selecionar Missões</Label>
+                <Select 
+                  value="placeholder"
+                  onValueChange={(value) => {
+                    if (value !== "placeholder" && !newGroup.selectedMissions.includes(value)) {
+                      setNewGroup({
+                        ...newGroup, 
+                        selectedMissions: [...newGroup.selectedMissions, value]
+                      });
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione missões para o grupo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="placeholder" disabled>
+                      Selecione missões para o grupo
+                    </SelectItem>
+                    {missions
+                      .filter(mission => !newGroup.selectedMissions.includes(mission.id))
+                      .map((mission) => (
+                        <SelectItem key={mission.id} value={mission.id}>
+                          {mission.titulo}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                
+                {newGroup.selectedMissions.length > 0 && (
+                  <div className="mt-2 space-y-2">
+                    <Label>Missões selecionadas:</Label>
+                    <div className="border rounded-md p-2 max-h-32 overflow-y-auto">
+                      <ul className="space-y-1">
+                        {newGroup.selectedMissions.map((missionId) => {
+                          const mission = missions.find(m => m.id === missionId);
+                          return (
+                            <li key={missionId} className="flex justify-between items-center text-sm">
+                              <span>{mission?.titulo}</span>
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => {
+                                  setNewGroup({
+                                    ...newGroup,
+                                    selectedMissions: newGroup.selectedMissions.filter(id => id !== missionId)
+                                  });
+                                }}
+                              >
+                                Remover
+                              </Button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="produtos">Selecionar Produtos</Label>
+                <Select 
+                  value="placeholder"
+                  onValueChange={(value) => {
+                    if (value !== "placeholder" && !newGroup.selectedProducts.includes(value)) {
+                      setNewGroup({
+                        ...newGroup, 
+                        selectedProducts: [...newGroup.selectedProducts, value]
+                      });
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione produtos para o grupo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="placeholder" disabled>
+                      Selecione produtos para o grupo
+                    </SelectItem>
+                    {products
+                      .filter(product => !newGroup.selectedProducts.includes(product.id))
+                      .map((product) => (
+                        <SelectItem key={product.id} value={product.id}>
+                          {product.nome}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                
+                {newGroup.selectedProducts.length > 0 && (
+                  <div className="mt-2 space-y-2">
+                    <Label>Produtos selecionados:</Label>
+                    <div className="border rounded-md p-2 max-h-32 overflow-y-auto">
+                      <ul className="space-y-1">
+                        {newGroup.selectedProducts.map((productId) => {
+                          const product = products.find(p => p.id === productId);
+                          return (
+                            <li key={productId} className="flex justify-between items-center text-sm">
+                              <span>{product?.nome}</span>
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => {
+                                  setNewGroup({
+                                    ...newGroup,
+                                    selectedProducts: newGroup.selectedProducts.filter(id => id !== productId)
+                                  });
+                                }}
+                              >
+                                Remover
+                              </Button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
                   </div>
                 )}
               </div>
             </div>
             
             <DialogFooter>
-              <Button variant="outline" onClick={() => {
-                setIsManagingMembers(false);
-                setSelectedGroup(null);
-                setSelectedGroupMembers([]);
-              }}>
-                Cancelar
-              </Button>
-              <Button onClick={handleSaveMembers}>
-                Salvar Membros
+              <Button variant="outline" onClick={() => setOpenDialog(false)}>Cancelar</Button>
+              <Button onClick={handleAddGroup} disabled={isLoading}>
+                {isLoading ? "Salvando..." : "Confirmar"}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
       
-      <Card className="mt-4">
-        <CardHeader>
-          <CardTitle>Grupos de Usuários</CardTitle>
-          <CardDescription>
-            Gerencie os grupos de usuários do sistema
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="flex items-center justify-center py-10">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <span className="ml-2">Carregando grupos...</span>
-            </div>
-          ) : groups.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Descrição</TableHead>
-                  <TableHead>Membros</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {groups.map((group) => (
-                  <TableRow key={group.id}>
-                    <TableCell>
-                      <div className="font-medium">{group.nome}</div>
-                    </TableCell>
-                    <TableCell>
-                      {group.descricao || <span className="text-muted-foreground italic">Sem descrição</span>}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center space-x-1">
-                        <Users className="h-4 w-4" />
-                        <span>{group.membros_count || 0} usuários</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end space-x-2">
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => handleManageMembers(group)}
-                        >
-                          <UserPlus className="h-4 w-4" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => handleEditGroup(group)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => handleDeleteGroup(group.id)}
-                          className="text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          ) : (
-            <div className="text-center py-10 text-muted-foreground">
-              <Users className="h-12 w-12 mx-auto mb-2 opacity-30" />
-              <p>Nenhum grupo cadastrado</p>
-              <p className="text-sm mt-1">
-                Clique em "Novo Grupo" para adicionar
-              </p>
-            </div>
+      {selectedGroup ? (
+        <div className="space-y-6 mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <UserSquare className="h-5 w-5" />
+                {selectedGroup.nome}
+              </CardTitle>
+              {selectedGroup.descricao && (
+                <CardDescription>
+                  {selectedGroup.descricao}
+                </CardDescription>
+              )}
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="font-medium flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    Usuários do Grupo
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    <div className="relative w-64">
+                      <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Buscar usuários"
+                        className="pl-10"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                      />
+                    </div>
+                    <Button variant="outline" size="sm" onClick={handleAddUserToGroup}>
+                      <Plus className="h-4 w-4 mr-1" />
+                      Adicionar
+                    </Button>
+                  </div>
+                </div>
+                
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Matrícula</TableHead>
+                        <TableHead>Nome</TableHead>
+                        <TableHead className="text-right">Ações</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredUsers.length > 0 ? (
+                        filteredUsers.map((user) => (
+                          <TableRow key={user.matricula}>
+                            <TableCell className="font-medium">{user.matricula}</TableCell>
+                            <TableCell>{user.nome}</TableCell>
+                            <TableCell className="text-right">
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => handleRemoveUserFromGroup(user.matricula)}
+                              >
+                                Remover do Grupo
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={3} className="text-center py-6 text-muted-foreground">
+                            {searchTerm 
+                              ? "Nenhum usuário encontrado com estes termos de busca." 
+                              : "Nenhum usuário neste grupo."}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <ListChecks className="h-4 w-4" />
+                      Missões do Grupo
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {/* Missões do grupo seriam exibidas aqui */}
+                    <div className="text-center py-6 text-muted-foreground">
+                      Funcionalidade em desenvolvimento
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Package2 className="h-4 w-4" />
+                      Produtos do Grupo
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {/* Produtos do grupo seriam exibidos aqui */}
+                    <div className="text-center py-6 text-muted-foreground">
+                      Funcionalidade em desenvolvimento
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
+        <div className="text-center py-10 text-muted-foreground">
+          <Users className="h-12 w-12 mx-auto mb-2 opacity-30" />
+          <p>Selecione um grupo para ver seus detalhes</p>
+          {groups.length === 0 && (
+            <p className="text-sm mt-1">
+              Ou crie um novo grupo clicando em "Novo Grupo"
+            </p>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      )}
     </>
   );
 };
