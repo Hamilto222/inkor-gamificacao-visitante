@@ -35,11 +35,147 @@ interface CustomMediaMetadata {
   };
 }
 
-// Custom type extension to include the media_metadata table
+// Type for posts_feed table
+interface PostsFeed {
+  Row: {
+    id: string;
+    titulo: string;
+    conteudo: string;
+    imagem_url: string | null;
+    ativo: boolean;
+    data_criacao: string;
+  };
+  Insert: {
+    id?: string;
+    titulo: string;
+    conteudo: string;
+    imagem_url?: string | null;
+    ativo?: boolean;
+    data_criacao?: string;
+  };
+  Update: {
+    id?: string;
+    titulo?: string;
+    conteudo?: string;
+    imagem_url?: string | null;
+    ativo?: boolean;
+    data_criacao?: string;
+  };
+}
+
+// Type for post_grupo table
+interface PostGrupo {
+  Row: {
+    id: string;
+    post_id: string;
+    grupo_id: string;
+  };
+  Insert: {
+    id?: string;
+    post_id: string;
+    grupo_id: string;
+  };
+  Update: {
+    id?: string;
+    post_id?: string;
+    grupo_id?: string;
+  };
+}
+
+// Type for reacoes_post table
+interface ReacoesPost {
+  Row: {
+    id: string;
+    post_id: string;
+    matricula: string;
+    tipo: string;
+    data_criacao: string;
+  };
+  Insert: {
+    id?: string;
+    post_id: string;
+    matricula: string;
+    tipo: string;
+    data_criacao?: string;
+  };
+  Update: {
+    id?: string;
+    post_id?: string;
+    matricula?: string;
+    tipo?: string;
+    data_criacao?: string;
+  };
+}
+
+// Type for comentarios_post table
+interface ComentariosPost {
+  Row: {
+    id: string;
+    post_id: string;
+    matricula: string;
+    texto: string;
+    data_criacao: string;
+  };
+  Insert: {
+    id?: string;
+    post_id: string;
+    matricula: string;
+    texto: string;
+    data_criacao?: string;
+  };
+  Update: {
+    id?: string;
+    post_id?: string;
+    matricula?: string;
+    texto?: string;
+    data_criacao?: string;
+  };
+}
+
+// Type for premios table
+interface Premios {
+  Row: {
+    id: string;
+    nome: string;
+    descricao: string;
+    pontos_necessarios: number;
+    quantidade: number;
+    imagem_url: string | null;
+    ativo: boolean;
+    data_criacao: string;
+  };
+  Insert: {
+    id?: string;
+    nome: string;
+    descricao: string;
+    pontos_necessarios: number;
+    quantidade?: number;
+    imagem_url?: string | null;
+    ativo?: boolean;
+    data_criacao?: string;
+  };
+  Update: {
+    id?: string;
+    nome?: string;
+    descricao?: string;
+    pontos_necessarios?: number;
+    quantidade?: number;
+    imagem_url?: string | null;
+    ativo?: boolean;
+    data_criacao?: string;
+  };
+}
+
+// Custom type extension to include all custom tables
 export type CustomDatabase = Database & {
   public: {
     Tables: {
       media_metadata: CustomMediaMetadata;
+      posts_feed: PostsFeed;
+      post_grupo: PostGrupo;
+      reacoes_post: ReacoesPost;
+      comentarios_post: ComentariosPost;
+      premios: Premios;
     } & Database['public']['Tables'];
   };
 };
