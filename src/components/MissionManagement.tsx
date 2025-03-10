@@ -75,12 +75,12 @@ export const MissionManagement = () => {
       }
 
       if (data) {
-        // Need to transform the data to match our Mission type
+        // Transform the data to match our Mission type
         const transformedData = data.map(mission => {
           return {
             ...mission,
             // Convert opcoes to our expected format if it exists
-            opcoes: mission.opcoes ? mission.opcoes as MissionOption[] : null
+            opcoes: mission.opcoes ? (mission.opcoes as unknown as MissionOption[]) : null
           };
         });
         

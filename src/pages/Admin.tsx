@@ -1,7 +1,7 @@
 
 import React, { useState } from "react";
 import { Layout } from "@/components/Layout";
-import { UserCog, ListChecks, FileVideo, Package2, Bell, Users } from "lucide-react";
+import { UserCog, ListChecks, FileVideo, Package2, Bell, Users, Gift, MessageSquare } from "lucide-react";
 import { AuthGuard } from "@/components/AuthGuard";
 import { UserManagement } from "@/components/UserManagement";
 import { MatriculasManagement } from "@/components/MatriculasManagement";
@@ -10,6 +10,8 @@ import { ProductManagement } from "@/components/ProductManagement";
 import { AdminNotifications } from "@/components/AdminNotifications";
 import { MissionManagement } from "@/components/MissionManagement";
 import { UserGroupManagement } from "@/components/UserGroupManagement";
+import { PrizeManagement } from "@/components/PrizeManagement";
+import { NewsFeedManagement } from "@/components/NewsFeedManagement";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const Admin = () => {
@@ -32,7 +34,7 @@ const Admin = () => {
           </header>
           
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid grid-cols-7 w-full max-w-5xl">
+            <TabsList className="grid grid-cols-9 w-full max-w-6xl">
               <TabsTrigger value="usuarios" className="flex items-center gap-2">
                 <UserCog className="h-4 w-4" />
                 Usuários
@@ -48,6 +50,14 @@ const Admin = () => {
               <TabsTrigger value="missoes" className="flex items-center gap-2">
                 <ListChecks className="h-4 w-4" />
                 Missões
+              </TabsTrigger>
+              <TabsTrigger value="premios" className="flex items-center gap-2">
+                <Gift className="h-4 w-4" />
+                Prêmios
+              </TabsTrigger>
+              <TabsTrigger value="feed" className="flex items-center gap-2">
+                <MessageSquare className="h-4 w-4" />
+                Feed
               </TabsTrigger>
               <TabsTrigger value="midias" className="flex items-center gap-2">
                 <FileVideo className="h-4 w-4" />
@@ -77,6 +87,14 @@ const Admin = () => {
             
             <TabsContent value="missoes" className="space-y-4 mt-6">
               <MissionManagement />
+            </TabsContent>
+            
+            <TabsContent value="premios" className="space-y-4 mt-6">
+              <PrizeManagement />
+            </TabsContent>
+            
+            <TabsContent value="feed" className="space-y-4 mt-6">
+              <NewsFeedManagement />
             </TabsContent>
             
             <TabsContent value="midias" className="space-y-4 mt-6">
