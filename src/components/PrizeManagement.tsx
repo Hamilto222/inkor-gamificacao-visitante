@@ -1,16 +1,14 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, Trash2, Gift, Award, Tag } from "lucide-react";
+import { Plus, Search, Gift } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface Prize {
@@ -125,14 +123,14 @@ export const PrizeManagement = () => {
         const prizeId = data[0].id;
         
         // Create entries in premio_grupo table
-        const grupoPremioData = selectedGroups.map(groupId => ({
+        const premioGrupoData = selectedGroups.map(groupId => ({
           premio_id: prizeId,
           grupo_id: groupId
         }));
         
         const { error: groupError } = await supabase
           .from('premio_grupo')
-          .insert(grupoPremioData);
+          .insert(premioGrupoData);
           
         if (groupError) {
           console.error("Erro ao associar prêmio a grupos:", groupError);

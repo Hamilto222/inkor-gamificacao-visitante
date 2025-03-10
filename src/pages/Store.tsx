@@ -1,11 +1,11 @@
-
 import React, { useState, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { 
   Medal, Umbrella, Coffee, Palmtree, CircuitBoard, 
-  ShoppingCart, CheckCircle, AlertCircle, LockIcon 
+  ShoppingCart, CheckCircle, AlertCircle, LockIcon,
+  Gift
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -17,42 +17,22 @@ import { supabase } from "@/integrations/supabase/client";
 
 interface Prize {
   id: string;
-  name: string;
-  points: number;
-  icon: any;
-  description: string;
+  nome: string;
+  pontos_necessarios: number;
+  descricao: string;
+  imagem_url?: string | null;
+  icon?: any;
 }
 
-const prizes: Prize[] = [
-  {
-    id: "bone-inkor",
-    name: "Boné Inkor",
-    points: 500,
-    icon: CircuitBoard,
-    description: "Boné exclusivo com a marca Inkor"
-  },
-  {
-    id: "copo-personalizado",
-    name: "Copo Personalizado",
-    points: 1000,
-    icon: Coffee,
-    description: "Copo térmico com seu nome"
-  },
-  {
-    id: "guarda-sol",
-    name: "Guarda-sol",
-    points: 2000,
-    icon: Umbrella,
-    description: "Guarda-sol de praia Inkor"
-  },
-  {
-    id: "cadeira-praia",
-    name: "Cadeira de Praia",
-    points: 3000,
-    icon: Palmtree,
-    description: "Cadeira de praia dobrável"
-  },
-];
+const iconMap: Record<string, any> = {
+  "default": Gift,
+  "boné": CircuitBoard,
+  "bone": CircuitBoard,
+  "copo": Coffee,
+  "guarda": Umbrella,
+  "guarda-sol": Umbrella,
+  "cadeira": Palmtree,
+};
 
 const Store = () => {
   const { toast } = useToast();
@@ -63,6 +43,7 @@ const Store = () => {
   const [confirmationStep, setConfirmationStep] = useState(false);
   const [userMatricula, setUserMatricula] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
+  const [prizes, setPrizes] = useState<Prize[]>([]);
 
   useEffect(() => {
     const loadUserData = async () => {
@@ -81,10 +62,14 @@ const Store = () => {
             .eq('matricula', currentUser.matricula)
             .single();
           
-          if (pointsError) throw pointsError;
+          if (pointsError && pointsError.code !== 'PGRST116') {
+            throw pointsError;
+          }
           
           if (pointsData) {
             setUserPoints(pointsData.total_pontos);
+          } else {
+            setUserPoints(0);
           }
           
           // Carregar prêmios já resgatados
@@ -93,11 +78,16 @@ const Store = () => {
             .select('premio_id')
             .eq('matricula', currentUser.matricula);
           
-          if (redeemedError) throw redeemedError;
+          if (redeemedError) {
+            throw redeemedError;
+          }
           
           if (redeemedData) {
             setRedeemedPrizes(redeemedData.map(item => item.premio_id));
           }
+          
+          // Carregar lista de prêmios disponíveis
+          await loadPrizes(currentUser.matricula);
         }
       } catch (error: any) {
         console.error("Erro ao carregar dados do usuário:", error.message);
@@ -114,6 +104,87 @@ const Store = () => {
     loadUserData();
   }, []);
 
+  const loadPrizes = async (matricula: string) => {
+    try {
+      // Get user group
+      const { data: userData, error: userError } = await supabase
+        .from('matriculas_funcionarios')
+        .select('grupo_id')
+        .eq('numero_matricula', matricula)
+        .single();
+      
+      const userGroupId = userData?.grupo_id;
+      
+      // Get all prizes
+      const { data: prizesData, error: prizesError } = await supabase
+        .from('premios')
+        .select('*')
+        .eq('ativo', true);
+        
+      if (prizesError) {
+        throw prizesError;
+      }
+      
+      if (!prizesData) {
+        setPrizes([]);
+        return;
+      }
+      
+      // Get prize group restrictions
+      const { data: prizeGroupsData } = await supabase
+        .from('premio_grupo')
+        .select('*');
+        
+      const prizeGroups = prizeGroupsData || [];
+      
+      // Filter prizes based on group access
+      let filteredPrizes = prizesData.filter(prize => {
+        // Check if prize has group restrictions
+        const prizeGroupRestrictions = prizeGroups.filter(pg => pg.premio_id === prize.id);
+        
+        // If prize has no groups, it's available to everyone
+        if (prizeGroupRestrictions.length === 0) {
+          return true;
+        }
+        
+        // If user has no group but prize has groups, user can't access
+        if (!userGroupId) {
+          return false;
+        }
+        
+        // Check if prize's groups include user's group
+        return prizeGroupRestrictions.some(pg => pg.grupo_id === userGroupId);
+      });
+      
+      // Map icons to prizes
+      const prizesWithIcons = filteredPrizes.map(prize => {
+        const lowerName = prize.nome.toLowerCase();
+        let iconComponent = iconMap.default;
+        
+        // Look for keywords to match icons
+        Object.entries(iconMap).forEach(([keyword, icon]) => {
+          if (keyword !== 'default' && lowerName.includes(keyword)) {
+            iconComponent = icon;
+          }
+        });
+        
+        return {
+          ...prize,
+          icon: iconComponent
+        };
+      });
+      
+      setPrizes(prizesWithIcons);
+    } catch (error) {
+      console.error("Error loading prizes:", error);
+      toast({
+        title: "Erro ao carregar prêmios",
+        description: "Não foi possível carregar a lista de prêmios.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleSelectPrize = (prize: Prize) => {
     setSelectedPrize(prize);
     setOpenDialog(true);
@@ -125,10 +196,10 @@ const Store = () => {
     
     try {
       // Verificar se o usuário tem pontos suficientes
-      if (userPoints < selectedPrize.points) {
+      if (userPoints < selectedPrize.pontos_necessarios) {
         toast({
           title: "Pontos insuficientes",
-          description: `Você precisa de mais ${selectedPrize.points - userPoints} pontos para resgatar este prêmio.`,
+          description: `Você precisa de mais ${selectedPrize.pontos_necessarios - userPoints} pontos para resgatar este prêmio.`,
           variant: "destructive",
         });
         setOpenDialog(false);
@@ -148,7 +219,7 @@ const Store = () => {
       if (redeemError) throw redeemError;
       
       // Atualizar os pontos do usuário
-      const newPoints = userPoints - selectedPrize.points;
+      const newPoints = userPoints - selectedPrize.pontos_necessarios;
       const { error: updateError } = await supabase
         .from('pontos_usuarios')
         .update({ total_pontos: newPoints })
@@ -162,7 +233,7 @@ const Store = () => {
       
       toast({
         title: "Prêmio resgatado com sucesso!",
-        description: `Você resgatou "${selectedPrize.name}". Procure um administrador para recebê-lo.`,
+        description: `Você resgatou "${selectedPrize.nome}". Procure um administrador para recebê-lo.`,
       });
       
       setOpenDialog(false);
@@ -180,7 +251,7 @@ const Store = () => {
   };
 
   const isPrizeAvailable = (prize: Prize) => {
-    return userPoints >= prize.points && !isPrizeRedeemed(prize.id);
+    return userPoints >= prize.pontos_necessarios && !isPrizeRedeemed(prize.id);
   };
 
   return (
@@ -243,9 +314,9 @@ const Store = () => {
                             : "text-primary"
                       }`} />
                     </div>
-                    <h3 className="text-xl font-semibold">{prize.name}</h3>
+                    <h3 className="text-xl font-semibold">{prize.nome}</h3>
                     <p className="text-sm text-muted-foreground">
-                      {prize.description}
+                      {prize.descricao}
                     </p>
                     <div className={`flex items-center justify-center gap-2 font-semibold ${
                       isPrizeRedeemed(prize.id) 
@@ -255,7 +326,7 @@ const Store = () => {
                           : "text-primary"
                     }`}>
                       <Medal className="w-5 h-5" />
-                      <span>{prize.points} pontos</span>
+                      <span>{prize.pontos_necessarios} pontos</span>
                     </div>
                     
                     {isPrizeRedeemed(prize.id) ? (
@@ -303,7 +374,7 @@ const Store = () => {
               <DialogDescription>
                 {confirmationStep 
                   ? "Confirme que deseja realmente resgatar este prêmio. Esta ação não pode ser desfeita."
-                  : `Você está prestes a trocar ${selectedPrize?.points} pontos por:`}
+                  : `Você está prestes a trocar ${selectedPrize?.pontos_necessarios} pontos por:`}
               </DialogDescription>
             </DialogHeader>
             
@@ -314,11 +385,11 @@ const Store = () => {
                     <selectedPrize.icon className="w-8 h-8 text-primary" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-lg">{selectedPrize.name}</h3>
-                    <p className="text-sm text-muted-foreground">{selectedPrize.description}</p>
+                    <h3 className="font-semibold text-lg">{selectedPrize.nome}</h3>
+                    <p className="text-sm text-muted-foreground">{selectedPrize.descricao}</p>
                     <div className="flex items-center gap-1 text-primary mt-1">
                       <Medal className="w-4 h-4" />
-                      <span>{selectedPrize.points} pontos</span>
+                      <span>{selectedPrize.pontos_necessarios} pontos</span>
                     </div>
                   </div>
                 </div>
@@ -336,16 +407,16 @@ const Store = () => {
               <div className="py-4">
                 <div className="p-4 mb-4 text-center bg-primary/5 rounded-md">
                   <p className="font-semibold mb-2">Resumo do resgate:</p>
-                  <p className="text-2xl font-bold text-primary">{selectedPrize.name}</p>
+                  <p className="text-2xl font-bold text-primary">{selectedPrize.nome}</p>
                   <div className="flex justify-center items-center gap-2 mt-2">
                     <Medal className="w-5 h-5 text-primary" />
-                    <span className="text-lg font-medium">{selectedPrize.points} pontos</span>
+                    <span className="text-lg font-medium">{selectedPrize.pontos_necessarios} pontos</span>
                   </div>
                 </div>
                 
                 <div className="flex items-center gap-2 justify-center p-3 bg-muted rounded-md">
                   <p className="text-sm">
-                    Seu saldo após o resgate: <span className="font-bold">{userPoints - selectedPrize.points} pontos</span>
+                    Seu saldo após o resgate: <span className="font-bold">{userPoints - selectedPrize.pontos_necessarios} pontos</span>
                   </p>
                 </div>
               </div>

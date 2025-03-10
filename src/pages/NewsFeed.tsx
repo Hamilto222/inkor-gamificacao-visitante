@@ -1,10 +1,8 @@
-
 import React, { useState, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { MessageSquare, Heart, Send, Calendar, ThumbsUp, ThumbsDown, MessageCircle } from "lucide-react";
@@ -90,95 +88,92 @@ const NewsFeed = () => {
       
       const userGroupId = userData?.grupo_id;
       
-      // Get posts that are either for all groups or for the user's group
-      let query = supabase
+      // Get posts
+      const { data: postsData, error: postsError } = await supabase
         .from('posts_feed')
-        .select(`
-          *,
-          post_grupo (grupo_id)
-        `)
+        .select('*')
         .eq('ativo', true)
         .order('data_criacao', { ascending: false });
         
-      const { data: postsData, error: postsError } = await query;
-      
       if (postsError) {
         throw postsError;
       }
       
-      if (postsData) {
-        // Filter posts based on group access
-        let filteredPosts = postsData.filter(post => {
-          // If post has no groups, it's available to everyone
-          if (!post.post_grupo || post.post_grupo.length === 0) {
-            return true;
-          }
-          
-          // If user has no group but post has groups, check if post is available to all
-          if (!userGroupId) {
-            return false;
-          }
-          
-          // Check if post's groups include user's group
-          return post.post_grupo.some((pg: any) => pg.grupo_id === userGroupId);
-        });
-        
-        // Get reactions for each post
-        const postsWithReactions = await Promise.all(
-          filteredPosts.map(async (post) => {
-            // Get reactions
-            const { data: reacoes, error: reacoesError } = await supabase
-              .from('reacoes_post')
-              .select('id, tipo, matricula')
-              .eq('post_id', post.id);
-              
-            if (reacoesError) {
-              console.error("Erro ao carregar reações:", reacoesError);
-              return { ...post, reacoes: [], comentarios: [] };
-            }
-            
-            // Get comments
-            const { data: comentarios, error: comentariosError } = await supabase
-              .from('comentarios_post')
-              .select(`
-                id, 
-                texto, 
-                matricula,
-                data_criacao,
-                matriculas_funcionarios (nome)
-              `)
-              .eq('post_id', post.id)
-              .order('data_criacao', { ascending: true });
-              
-            if (comentariosError) {
-              console.error("Erro ao carregar comentários:", comentariosError);
-              return { ...post, reacoes: reacoes || [], comentarios: [] };
-            }
-            
-            // Format comments to include user name
-            const formattedComentarios = comentarios ? comentarios.map((comentario: any) => ({
-              id: comentario.id,
-              texto: comentario.texto,
-              matricula: comentario.matricula,
-              nome_usuario: comentario.matriculas_funcionarios?.nome || "Usuário",
-              data_criacao: comentario.data_criacao
-            })) : [];
-            
-            // Check if user has reacted to this post
-            const userReaction = reacoes?.find(r => r.matricula === matricula)?.tipo || null;
-            
-            return { 
-              ...post, 
-              reacoes: reacoes || [], 
-              comentarios: formattedComentarios,
-              reacao_usuario: userReaction
-            };
-          })
-        );
-        
-        setPosts(postsWithReactions);
+      if (!postsData) {
+        setPosts([]);
+        return;
       }
-    } catch (error) {
+      
+      // Get post groups for filtering
+      const { data: postGroupsData } = await supabase
+        .from('post_grupo')
+        .select('*');
+      
+      const postGroups = postGroupsData || [];
+      
+      // Filter posts based on group access
+      let filteredPosts = postsData.filter(post => {
+        // Check if post has group restrictions
+        const postGroupRestrictions = postGroups.filter(pg => pg.post_id === post.id);
+        
+        // If post has no groups, it's available to everyone
+        if (postGroupRestrictions.length === 0) {
+          return true;
+        }
+        
+        // If user has no group but post has groups, check if user's group is included
+        if (!userGroupId) {
+          return false;
+        }
+        
+        // Check if post's groups include user's group
+        return postGroupRestrictions.some(pg => pg.grupo_id === userGroupId);
+      });
+      
+      // Get reactions and comments for each post
+      const postsWithReactionsAndComments = await Promise.all(
+        filteredPosts.map(async (post) => {
+          // Get reactions
+          const { data: reacoes } = await supabase
+            .from('reacoes_post')
+            .select('id, tipo, matricula')
+            .eq('post_id', post.id);
+            
+          // Get comments
+          const { data: comentariosData } = await supabase
+            .from('comentarios_post')
+            .select('id, texto, matricula, data_criacao')
+            .eq('post_id', post.id)
+            .order('data_criacao', { ascending: true });
+            
+          // Get user names for comments
+          const comentarios = await Promise.all((comentariosData || []).map(async (comment) => {
+            const { data: userData } = await supabase
+              .from('matriculas_funcionarios')
+              .select('nome')
+              .eq('numero_matricula', comment.matricula)
+              .single();
+              
+            return {
+              ...comment,
+              nome_usuario: userData?.nome || "Usuário"
+            };
+          }));
+          
+          // Check if user has reacted to this post
+          const userReaction = reacoes?.find(r => r.matricula === matricula)?.tipo || null;
+          
+          return { 
+            ...post, 
+            reacoes: reacoes || [], 
+            comentarios: comentarios || [],
+            reacao_usuario: userReaction
+          };
+        })
+      );
+      
+      setPosts(postsWithReactionsAndComments);
+    } catch (error: any) {
       console.error("Erro ao carregar posts:", error);
       toast({
         title: "Erro ao carregar feed",

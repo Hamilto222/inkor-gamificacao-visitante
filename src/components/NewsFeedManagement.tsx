@@ -1,16 +1,14 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, Trash2, MessageSquare, Pencil, Calendar, Users } from "lucide-react";
+import { Plus, Search, Trash2, MessageSquare, Calendar, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface NewsPost {
@@ -48,7 +46,7 @@ export const NewsFeedManagement = () => {
       setIsLoading(true);
       const { data, error } = await supabase
         .from('posts_feed')
-        .select('*, post_grupo(grupo_id)')
+        .select('*')
         .order('data_criacao', { ascending: false });
 
       if (error) {
@@ -56,15 +54,20 @@ export const NewsFeedManagement = () => {
       }
 
       if (data) {
-        // Process data to extract grupo_ids into an array
+        const { data: postGroupData, error: postGroupError } = await supabase
+          .from('post_grupo')
+          .select('*');
+          
+        if (postGroupError) {
+          console.error("Error fetching post groups:", postGroupError);
+        }
+        
         const processedPosts = data.map(post => {
           let grupos_alvo: string[] = [];
           
-          if (post.post_grupo) {
-            // If post_grupo is an array (from a join)
-            if (Array.isArray(post.post_grupo)) {
-              grupos_alvo = post.post_grupo.map((pg: any) => pg.grupo_id);
-            }
+          if (postGroupData) {
+            const postGroups = postGroupData.filter(pg => pg.post_id === post.id);
+            grupos_alvo = postGroups.map(pg => pg.grupo_id);
           }
           
           return {
@@ -118,7 +121,6 @@ export const NewsFeedManagement = () => {
     try {
       setIsLoading(true);
       
-      // Insert post
       const { data, error } = await supabase
         .from('posts_feed')
         .insert([{
@@ -133,11 +135,9 @@ export const NewsFeedManagement = () => {
         throw error;
       }
 
-      // If groups were selected, associate the post with those groups
       if (selectedGroups.length > 0 && data && data.length > 0) {
         const postId = data[0].id;
         
-        // Create entries in post_grupo table
         const grupoPostData = selectedGroups.map(groupId => ({
           post_id: postId,
           grupo_id: groupId
@@ -162,7 +162,6 @@ export const NewsFeedManagement = () => {
         description: `O post "${newPost.titulo}" foi criado com sucesso.`,
       });
       
-      // Reset form
       setNewPost({
         titulo: "",
         conteudo: "",
@@ -214,25 +213,33 @@ export const NewsFeedManagement = () => {
 
   const handleDeletePost = async (id: string) => {
     try {
-      // First delete related records in post_grupo
-      await supabase
+      const { error: pgError } = await supabase
         .from('post_grupo')
         .delete()
         .eq('post_id', id);
         
-      // Then delete comments
-      await supabase
+      if (pgError) {
+        console.error("Error deleting post_grupo records:", pgError);
+      }
+        
+      const { error: commentsError } = await supabase
         .from('comentarios_post')
         .delete()
         .eq('post_id', id);
         
-      // Then delete reactions
-      await supabase
+      if (commentsError) {
+        console.error("Error deleting comments:", commentsError);
+      }
+        
+      const { error: reactionsError } = await supabase
         .from('reacoes_post')
         .delete()
         .eq('post_id', id);
         
-      // Finally delete the post
+      if (reactionsError) {
+        console.error("Error deleting reactions:", reactionsError);
+      }
+        
       const { error } = await supabase
         .from('posts_feed')
         .delete()
