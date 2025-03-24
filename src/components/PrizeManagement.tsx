@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, Gift } from "lucide-react";
+import { Plus, Search, Gift, Upload, FileCheck2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface Prize {
@@ -36,6 +37,9 @@ export const PrizeManagement = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [openDialog, setOpenDialog] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -88,6 +92,53 @@ export const PrizeManagement = () => {
     }
   };
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setSelectedImage(file);
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const uploadImage = async (file: File): Promise<string | null> => {
+    try {
+      // Create a unique filename
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+      const filePath = `prize-images/${fileName}`;
+      
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('media-files')
+        .upload(filePath, file);
+        
+      if (uploadError) {
+        throw uploadError;
+      }
+      
+      // Get public URL
+      const { data } = supabase.storage
+        .from('media-files')
+        .getPublicUrl(filePath);
+        
+      return data.publicUrl;
+    } catch (error) {
+      console.error("Error uploading image:", error);
+      toast({
+        title: "Erro ao enviar imagem",
+        description: "Não foi possível fazer upload da imagem.",
+        variant: "destructive",
+      });
+      return null;
+    }
+  };
+
   const handleAddPrize = async () => {
     if (!newPrize.nome || !newPrize.descricao) {
       toast({
@@ -101,6 +152,12 @@ export const PrizeManagement = () => {
     try {
       setIsLoading(true);
       
+      // Upload image if selected
+      let imageUrl = null;
+      if (selectedImage) {
+        imageUrl = await uploadImage(selectedImage);
+      }
+      
       // Insert prize
       const { data, error } = await supabase
         .from('premios')
@@ -109,7 +166,7 @@ export const PrizeManagement = () => {
           descricao: newPrize.descricao,
           pontos_necessarios: newPrize.pontos_necessarios,
           quantidade: newPrize.quantidade,
-          imagem_url: newPrize.imagem_url || null,
+          imagem_url: imageUrl || null,
           ativo: newPrize.ativo
         }])
         .select();
@@ -142,10 +199,7 @@ export const PrizeManagement = () => {
         }
       }
 
-      toast({
-        title: "Prêmio criado",
-        description: `O prêmio "${newPrize.nome}" foi criado com sucesso.`,
-      });
+      setShowSuccessDialog(true);
       
       // Reset form
       setNewPrize({
@@ -156,8 +210,9 @@ export const PrizeManagement = () => {
         ativo: true,
       });
       setSelectedGroups([]);
+      setSelectedImage(null);
+      setImagePreview(null);
       
-      setOpenDialog(false);
       loadPrizes();
     } catch (error) {
       console.error("Erro ao criar prêmio:", error);
@@ -280,13 +335,49 @@ export const PrizeManagement = () => {
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="imagem">URL da Imagem (opcional)</Label>
-                  <Input 
-                    id="imagem" 
-                    value={newPrize.imagem_url || ""}
-                    onChange={(e) => setNewPrize({...newPrize, imagem_url: e.target.value})}
-                    placeholder="https://exemplo.com/imagem.jpg"
-                  />
+                  <Label htmlFor="imagem">Imagem (opcional)</Label>
+                  <div className="flex flex-col space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        className="w-full"
+                        onClick={() => document.getElementById('prize-image')?.click()}
+                      >
+                        <Upload className="mr-2 h-4 w-4" />
+                        Selecionar Imagem
+                      </Button>
+                    </div>
+                    <Input 
+                      id="prize-image" 
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleImageChange}
+                    />
+                    
+                    {imagePreview && (
+                      <div className="mt-2 relative">
+                        <img 
+                          src={imagePreview} 
+                          alt="Preview" 
+                          className="w-full h-24 object-cover rounded-md" 
+                        />
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          className="absolute top-1 right-1"
+                          onClick={() => {
+                            setSelectedImage(null);
+                            setImagePreview(null);
+                          }}
+                        >
+                          ×
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
               
@@ -399,6 +490,30 @@ export const PrizeManagement = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Success Dialog */}
+      <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
+        <DialogContent>
+          <div className="flex flex-col items-center justify-center p-6 text-center">
+            <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mb-4">
+              <FileCheck2 className="h-6 w-6 text-green-600" />
+            </div>
+            <DialogTitle className="text-xl mb-2">Prêmio Criado com Sucesso!</DialogTitle>
+            <DialogDescription>
+              O prêmio foi adicionado e já está disponível para resgate.
+            </DialogDescription>
+            <Button 
+              className="mt-6 w-full" 
+              onClick={() => {
+                setShowSuccessDialog(false);
+                setOpenDialog(false);
+              }}
+            >
+              Entendido
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };
