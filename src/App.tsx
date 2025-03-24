@@ -11,9 +11,14 @@ import NewsFeed from "./pages/NewsFeed";
 import FactoryMap from "./pages/FactoryMap";
 import Scanner from "./pages/Scanner";
 import NotFound from "./pages/NotFound";
+import Products from "./pages/Products";
 import "./App.css";
+import { isMobileApp } from "./hooks/use-mobile";
 
 function App() {
+  // Detect if we're running as a mobile app
+  const isMobile = isMobileApp();
+
   return (
     <Router>
       <Routes>
@@ -27,6 +32,7 @@ function App() {
         <Route path="/news" element={<NewsFeed />} />
         <Route path="/map" element={<FactoryMap />} />
         <Route path="/scanner" element={<Scanner />} />
+        <Route path="/products" element={<Products />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Router>
