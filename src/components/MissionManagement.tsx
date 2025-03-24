@@ -227,7 +227,7 @@ export const MissionManagement = () => {
       }
       
       // Prepare mission data for saving
-      const missionData = {
+      const missionData: any = {
         titulo: newMission.titulo,
         descricao: newMission.descricao,
         tipo: newMission.tipo,
@@ -239,17 +239,15 @@ export const MissionManagement = () => {
       
       // Add type-specific fields
       if (newMission.tipo === "multipla_escolha") {
-        Object.assign(missionData, {
-          opcoes: newMission.opcoes,
-          resposta_correta: newMission.resposta_correta
-        });
+        missionData.opcoes = newMission.opcoes;
+        missionData.resposta_correta = newMission.resposta_correta;
       } else {
         // For other types, we don't need these fields
-        Object.assign(missionData, {
-          opcoes: null,
-          resposta_correta: null
-        });
+        missionData.opcoes = null;
+        missionData.resposta_correta = null;
       }
+
+      console.log("Saving mission data:", missionData);
 
       const { data, error } = await supabase
         .from('missoes')
@@ -257,8 +255,11 @@ export const MissionManagement = () => {
         .select();
 
       if (error) {
+        console.error("Supabase error:", error);
         throw error;
       }
+
+      console.log("Mission saved successfully:", data);
 
       // Show success dialog
       setShowSuccessDialog(true);
@@ -292,11 +293,11 @@ export const MissionManagement = () => {
       setTimeout(() => {
         loadMissions();
       }, 500);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro ao criar missão:", error);
       toast({
         title: "Erro ao criar missão",
-        description: "Não foi possível criar a missão.",
+        description: error.message || "Não foi possível criar a missão.",
         variant: "destructive",
       });
     } finally {

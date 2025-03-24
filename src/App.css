@@ -1,42 +1,84 @@
-#root {
-  max-width: 1280px;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+body {
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.glass-card {
+  backdrop-filter: blur(8px);
+  background-color: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.dark .glass-card {
+  background-color: rgba(30, 30, 30, 0.8);
+  border: 1px solid rgba(70, 70, 70, 0.5);
+}
+
+/* Mobile app specific styles */
+.mobile-app .glass-card {
+  margin-bottom: 20px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.mobile-app button {
+  touch-action: manipulation;
+}
+
+.mobile-app input,
+.mobile-app select,
+.mobile-app textarea {
+  font-size: 16px !important; /* Prevents iOS zoom on focus */
+}
+
+/* Improve touch targets for mobile */
+.mobile-app .card-header,
+.mobile-app .form-control,
+.mobile-app button,
+.mobile-app a {
+  min-height: 44px;
+}
+
+/* Better scrolling for mobile */
+.mobile-app {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Fix for bottom bar in iOS */
+.mobile-app .layout-container {
+  padding-bottom: env(safe-area-inset-bottom, 20px);
+}
+
+/* Enhanced tap highlight color for mobile */
+.mobile-app {
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+}
+
+/* Adjust dialogs and modals for mobile */
+.mobile-app .dialog-content {
+  width: 95vw !important;
+  max-width: 95vw !important;
   margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
-}
-
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
+@media (max-width: 640px) {
+  .card-header {
+    padding: 1rem;
   }
-  to {
-    transform: rotate(360deg);
+  
+  .card-content {
+    padding: 1rem;
   }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
+  
+  h1 {
+    font-size: 1.5rem;
   }
-}
-
-.card {
-  padding: 2em;
-}
-
-.read-the-docs {
-  color: #888;
+  
+  .spacing-y-4 {
+    margin-top: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
 }

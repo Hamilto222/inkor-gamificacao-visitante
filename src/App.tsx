@@ -13,11 +13,21 @@ import Scanner from "./pages/Scanner";
 import NotFound from "./pages/NotFound";
 import Products from "./pages/Products";
 import "./App.css";
+import { useEffect } from "react";
 import { isMobileApp } from "./hooks/use-mobile";
 
 function App() {
   // Detect if we're running as a mobile app
   const isMobile = isMobileApp();
+  
+  // Set mobile class on body for global styling
+  useEffect(() => {
+    if (isMobile) {
+      document.body.classList.add('mobile-app');
+    } else {
+      document.body.classList.remove('mobile-app');
+    }
+  }, [isMobile]);
 
   return (
     <Router>

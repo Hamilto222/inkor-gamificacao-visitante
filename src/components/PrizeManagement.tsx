@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, Gift, Upload, FileCheck2 } from "lucide-react";
+import { Plus, Search, Trash2, Award, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface Prize {
@@ -20,7 +21,6 @@ interface Prize {
   quantidade: number;
   imagem_url?: string | null;
   ativo: boolean;
-  data_criacao?: string;
 }
 
 export const PrizeManagement = () => {
@@ -30,21 +30,17 @@ export const PrizeManagement = () => {
     descricao: "",
     pontos_necessarios: 100,
     quantidade: 10,
-    ativo: true,
+    ativo: true
   });
-  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
-  const [availableGroups, setAvailableGroups] = useState<{id: string, nome: string}[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [openDialog, setOpenDialog] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     loadPrizes();
-    loadGroups();
   }, []);
 
   const loadPrizes = async () => {
@@ -71,24 +67,6 @@ export const PrizeManagement = () => {
       });
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const loadGroups = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('grupos_usuarios')
-        .select('id, nome');
-
-      if (error) {
-        throw error;
-      }
-
-      if (data) {
-        setAvailableGroups(data);
-      }
-    } catch (error) {
-      console.error("Erro ao carregar grupos:", error);
     }
   };
 
@@ -140,7 +118,7 @@ export const PrizeManagement = () => {
   };
 
   const handleAddPrize = async () => {
-    if (!newPrize.nome || !newPrize.descricao) {
+    if (!newPrize.nome || !newPrize.descricao || !newPrize.pontos_necessarios) {
       toast({
         title: "Campos obrigatórios",
         description: "Preencha todos os campos obrigatórios.",
@@ -158,48 +136,29 @@ export const PrizeManagement = () => {
         imageUrl = await uploadImage(selectedImage);
       }
       
-      // Insert prize
+      // Prepare prize data for saving
+      const prizeData = {
+        nome: newPrize.nome,
+        descricao: newPrize.descricao,
+        pontos_necessarios: newPrize.pontos_necessarios,
+        quantidade: newPrize.quantidade,
+        ativo: newPrize.ativo,
+        imagem_url: imageUrl
+      };
+
       const { data, error } = await supabase
         .from('premios')
-        .insert([{
-          nome: newPrize.nome,
-          descricao: newPrize.descricao,
-          pontos_necessarios: newPrize.pontos_necessarios,
-          quantidade: newPrize.quantidade,
-          imagem_url: imageUrl || null,
-          ativo: newPrize.ativo
-        }])
+        .insert([prizeData])
         .select();
 
       if (error) {
         throw error;
       }
 
-      // If groups were selected, associate the prize with those groups
-      if (selectedGroups.length > 0 && data && data.length > 0) {
-        const prizeId = data[0].id;
-        
-        // Create entries in premio_grupo table
-        const premioGrupoData = selectedGroups.map(groupId => ({
-          premio_id: prizeId,
-          grupo_id: groupId
-        }));
-        
-        const { error: groupError } = await supabase
-          .from('premio_grupo')
-          .insert(premioGrupoData);
-          
-        if (groupError) {
-          console.error("Erro ao associar prêmio a grupos:", groupError);
-          toast({
-            title: "Aviso",
-            description: "Prêmio criado, mas houve um erro ao associá-lo aos grupos.",
-            variant: "destructive",
-          });
-        }
-      }
-
-      setShowSuccessDialog(true);
+      toast({
+        title: "Prêmio adicionado",
+        description: `O prêmio "${newPrize.nome}" foi adicionado com sucesso.`,
+      });
       
       // Reset form
       setNewPrize({
@@ -207,18 +166,19 @@ export const PrizeManagement = () => {
         descricao: "",
         pontos_necessarios: 100,
         quantidade: 10,
-        ativo: true,
+        ativo: true
       });
-      setSelectedGroups([]);
       setSelectedImage(null);
       setImagePreview(null);
+      setOpenDialog(false);
       
+      // Reload prizes
       loadPrizes();
     } catch (error) {
-      console.error("Erro ao criar prêmio:", error);
+      console.error("Erro ao adicionar prêmio:", error);
       toast({
-        title: "Erro ao criar prêmio",
-        description: "Não foi possível criar o prêmio.",
+        title: "Erro ao adicionar prêmio",
+        description: "Não foi possível adicionar o prêmio.",
         variant: "destructive",
       });
     } finally {
@@ -228,12 +188,16 @@ export const PrizeManagement = () => {
 
   const handleToggleStatus = async (id: string, currentStatus: boolean) => {
     try {
+      setIsLoading(true);
+      console.log(`Updating prize ${id} status to ${!currentStatus}`);
+      
       const { error } = await supabase
         .from('premios')
         .update({ ativo: !currentStatus })
         .eq('id', id);
 
       if (error) {
+        console.error("Error updating prize status:", error);
         throw error;
       }
 
@@ -242,7 +206,8 @@ export const PrizeManagement = () => {
         description: `O prêmio foi ${currentStatus ? "desativado" : "ativado"} com sucesso.`,
       });
 
-      loadPrizes();
+      // Reload prizes to reflect the change
+      await loadPrizes();
     } catch (error) {
       console.error("Erro ao atualizar status do prêmio:", error);
       toast({
@@ -250,19 +215,12 @@ export const PrizeManagement = () => {
         description: "Não foi possível atualizar o status do prêmio.",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleGroupSelection = (groupId: string) => {
-    setSelectedGroups(prev => {
-      if (prev.includes(groupId)) {
-        return prev.filter(id => id !== groupId);
-      } else {
-        return [...prev, groupId];
-      }
-    });
-  };
-
+  // Filter prizes based on search term
   const filteredPrizes = prizes.filter(prize => 
     prize.nome.toLowerCase().includes(searchTerm.toLowerCase()) || 
     prize.descricao.toLowerCase().includes(searchTerm.toLowerCase())
@@ -279,36 +237,23 @@ export const PrizeManagement = () => {
               Novo Prêmio
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-3xl">
+          <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Criar Novo Prêmio</DialogTitle>
+              <DialogTitle>Adicionar Novo Prêmio</DialogTitle>
               <DialogDescription>
-                Adicione um novo prêmio que os usuários poderão resgatar com seus pontos.
+                Adicione um novo prêmio para ser resgatado com pontos.
               </DialogDescription>
             </DialogHeader>
             
             <div className="space-y-4 py-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="nome">Nome do Prêmio</Label>
-                  <Input 
-                    id="nome" 
-                    value={newPrize.nome}
-                    onChange={(e) => setNewPrize({...newPrize, nome: e.target.value})}
-                    placeholder="Digite o nome do prêmio"
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="pontos">Pontos Necessários</Label>
-                  <Input 
-                    id="pontos" 
-                    type="number"
-                    min={1}
-                    value={newPrize.pontos_necessarios}
-                    onChange={(e) => setNewPrize({...newPrize, pontos_necessarios: parseInt(e.target.value)})}
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="nome">Nome do Prêmio</Label>
+                <Input 
+                  id="nome" 
+                  value={newPrize.nome}
+                  onChange={(e) => setNewPrize({...newPrize, nome: e.target.value})}
+                  placeholder="Digite o nome do prêmio"
+                />
               </div>
               
               <div className="space-y-2">
@@ -318,66 +263,73 @@ export const PrizeManagement = () => {
                   rows={3}
                   value={newPrize.descricao}
                   onChange={(e) => setNewPrize({...newPrize, descricao: e.target.value})}
-                  placeholder="Descreva detalhadamente o prêmio"
+                  placeholder="Descreva o prêmio"
                 />
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="quantidade">Quantidade Disponível</Label>
+              <div className="space-y-2">
+                <Label htmlFor="pontos">Pontos Necessários</Label>
+                <Input 
+                  id="pontos" 
+                  type="number"
+                  min={1}
+                  value={newPrize.pontos_necessarios}
+                  onChange={(e) => setNewPrize({...newPrize, pontos_necessarios: parseInt(e.target.value) || 0})}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="quantidade">Quantidade Disponível</Label>
+                <Input 
+                  id="quantidade" 
+                  type="number"
+                  min={0}
+                  value={newPrize.quantidade}
+                  onChange={(e) => setNewPrize({...newPrize, quantidade: parseInt(e.target.value) || 0})}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="imagem">Imagem (opcional)</Label>
+                <div className="flex flex-col space-y-2">
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    className="w-full"
+                    onClick={() => document.getElementById('prize-image')?.click()}
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    Selecionar Imagem
+                  </Button>
                   <Input 
-                    id="quantidade" 
-                    type="number"
-                    min={0}
-                    value={newPrize.quantidade}
-                    onChange={(e) => setNewPrize({...newPrize, quantidade: parseInt(e.target.value)})}
+                    id="prize-image" 
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleImageChange}
                   />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="imagem">Imagem (opcional)</Label>
-                  <div className="flex flex-col space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        className="w-full"
-                        onClick={() => document.getElementById('prize-image')?.click()}
+                  
+                  {imagePreview && (
+                    <div className="mt-2 relative">
+                      <img 
+                        src={imagePreview} 
+                        alt="Preview" 
+                        className="w-full h-24 object-cover rounded-md" 
+                      />
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        className="absolute top-1 right-1"
+                        onClick={() => {
+                          setSelectedImage(null);
+                          setImagePreview(null);
+                        }}
                       >
-                        <Upload className="mr-2 h-4 w-4" />
-                        Selecionar Imagem
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-                    <Input 
-                      id="prize-image" 
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleImageChange}
-                    />
-                    
-                    {imagePreview && (
-                      <div className="mt-2 relative">
-                        <img 
-                          src={imagePreview} 
-                          alt="Preview" 
-                          className="w-full h-24 object-cover rounded-md" 
-                        />
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="sm"
-                          className="absolute top-1 right-1"
-                          onClick={() => {
-                            setSelectedImage(null);
-                            setImagePreview(null);
-                          }}
-                        >
-                          ×
-                        </Button>
-                      </div>
-                    )}
-                  </div>
+                  )}
                 </div>
               </div>
               
@@ -387,36 +339,14 @@ export const PrizeManagement = () => {
                   checked={newPrize.ativo} 
                   onCheckedChange={(checked) => setNewPrize({...newPrize, ativo: checked})}
                 />
-                <Label htmlFor="ativo">Prêmio ativo</Label>
-              </div>
-              
-              <div className="space-y-2 border p-4 rounded-md">
-                <Label className="block mb-2">Grupos com acesso a este prêmio</Label>
-                <div className="space-y-2 max-h-40 overflow-y-auto">
-                  {availableGroups.map((group) => (
-                    <div key={group.id} className="flex items-center space-x-2">
-                      <Switch 
-                        id={`group-${group.id}`}
-                        checked={selectedGroups.includes(group.id)} 
-                        onCheckedChange={() => handleGroupSelection(group.id)}
-                      />
-                      <Label htmlFor={`group-${group.id}`}>{group.nome}</Label>
-                    </div>
-                  ))}
-                </div>
-                {availableGroups.length === 0 && (
-                  <p className="text-sm text-muted-foreground">Nenhum grupo disponível</p>
-                )}
-                <p className="text-xs text-muted-foreground mt-2">
-                  Se nenhum grupo for selecionado, o prêmio será visível para todos os usuários.
-                </p>
+                <Label htmlFor="ativo">Prêmio Ativo</Label>
               </div>
             </div>
             
             <DialogFooter>
               <Button variant="outline" onClick={() => setOpenDialog(false)}>Cancelar</Button>
               <Button onClick={handleAddPrize} disabled={isLoading}>
-                {isLoading ? "Salvando..." : "Confirmar"}
+                {isLoading ? "Salvando..." : "Adicionar Prêmio"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -425,9 +355,9 @@ export const PrizeManagement = () => {
       
       <Card className="mt-4">
         <CardHeader>
-          <div className="flex justify-between items-center">
+          <div className="flex justify-between items-center flex-wrap gap-2">
             <CardTitle>Lista de Prêmios</CardTitle>
-            <div className="relative w-64">
+            <div className="relative w-full sm:w-64">
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Buscar prêmios"
@@ -438,17 +368,18 @@ export const PrizeManagement = () => {
             </div>
           </div>
           <CardDescription>
-            Total de {filteredPrizes.length} prêmios cadastrados no sistema
+            Total de {filteredPrizes.length} prêmios cadastrados
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="overflow-x-auto">
           <div className="rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Nome</TableHead>
+                  <TableHead className="hidden md:table-cell">Descrição</TableHead>
                   <TableHead>Pontos</TableHead>
-                  <TableHead>Quantidade</TableHead>
+                  <TableHead className="hidden md:table-cell">Quantidade</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
@@ -458,19 +389,31 @@ export const PrizeManagement = () => {
                   filteredPrizes.map((prize) => (
                     <TableRow key={prize.id}>
                       <TableCell className="font-medium">{prize.nome}</TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        {prize.descricao.length > 50 
+                          ? `${prize.descricao.substring(0, 50)}...` 
+                          : prize.descricao
+                        }
+                      </TableCell>
                       <TableCell>{prize.pontos_necessarios} pts</TableCell>
-                      <TableCell>{prize.quantidade}</TableCell>
+                      <TableCell className="hidden md:table-cell">{prize.quantidade}</TableCell>
                       <TableCell>
                         <div className="flex items-center space-x-2">
                           <Switch 
                             checked={prize.ativo} 
-                            onCheckedChange={() => prize.id && handleToggleStatus(prize.id, prize.ativo)} 
+                            onCheckedChange={() => prize.id && handleToggleStatus(prize.id, prize.ativo)}
+                            disabled={isLoading}
                           />
                           <span>{prize.ativo ? "Ativo" : "Inativo"}</span>
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button variant="outline" size="sm" onClick={() => prize.id && handleToggleStatus(prize.id, prize.ativo)}>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => prize.id && handleToggleStatus(prize.id, prize.ativo)}
+                          disabled={isLoading}
+                        >
                           {prize.ativo ? "Desativar" : "Ativar"}
                         </Button>
                       </TableCell>
@@ -478,7 +421,7 @@ export const PrizeManagement = () => {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
                       {searchTerm 
                         ? "Nenhum prêmio encontrado com estes termos de busca." 
                         : "Nenhum prêmio cadastrado no sistema."}
@@ -490,30 +433,6 @@ export const PrizeManagement = () => {
           </div>
         </CardContent>
       </Card>
-
-      {/* Success Dialog */}
-      <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
-        <DialogContent>
-          <div className="flex flex-col items-center justify-center p-6 text-center">
-            <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mb-4">
-              <FileCheck2 className="h-6 w-6 text-green-600" />
-            </div>
-            <DialogTitle className="text-xl mb-2">Prêmio Criado com Sucesso!</DialogTitle>
-            <DialogDescription>
-              O prêmio foi adicionado e já está disponível para resgate.
-            </DialogDescription>
-            <Button 
-              className="mt-6 w-full" 
-              onClick={() => {
-                setShowSuccessDialog(false);
-                setOpenDialog(false);
-              }}
-            >
-              Entendido
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </>
   );
 };
