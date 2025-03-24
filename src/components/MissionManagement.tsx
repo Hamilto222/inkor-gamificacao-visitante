@@ -10,8 +10,9 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, Trash2, Image, HelpCircle, Activity, ListChecks } from "lucide-react";
+import { Plus, Search, Trash2, Image, HelpCircle, Activity, ListChecks, FileCheck2, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 interface MissionOption {
   text: string;
@@ -56,6 +57,10 @@ export const MissionManagement = () => {
     { text: "Opção 2", value: "opcao2" },
     { text: "Opção 3", value: "opcao3" },
   ]);
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+  const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -146,6 +151,53 @@ export const MissionManagement = () => {
     });
   };
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setSelectedImage(file);
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const uploadImage = async (file: File): Promise<string | null> => {
+    try {
+      // Create a unique filename
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+      const filePath = `mission-images/${fileName}`;
+      
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('media-files')
+        .upload(filePath, file);
+        
+      if (uploadError) {
+        throw uploadError;
+      }
+      
+      // Get public URL
+      const { data } = supabase.storage
+        .from('media-files')
+        .getPublicUrl(filePath);
+        
+      return data.publicUrl;
+    } catch (error) {
+      console.error("Error uploading image:", error);
+      toast({
+        title: "Erro ao enviar imagem",
+        description: "Não foi possível fazer upload da imagem.",
+        variant: "destructive",
+      });
+      return null;
+    }
+  };
+
   const handleAddMission = async () => {
     if (!newMission.titulo || !newMission.descricao) {
       toast({
@@ -168,6 +220,12 @@ export const MissionManagement = () => {
     try {
       setIsLoading(true);
       
+      // Upload image if selected
+      let imageUrl = null;
+      if (selectedImage) {
+        imageUrl = await uploadImage(selectedImage);
+      }
+      
       // Prepare mission data for saving
       const missionData = {
         titulo: newMission.titulo,
@@ -176,7 +234,7 @@ export const MissionManagement = () => {
         pontos: newMission.pontos,
         ativo: newMission.ativo,
         evidencia_obrigatoria: newMission.evidencia_obrigatoria,
-        imagem_url: newMission.imagem_url || null
+        imagem_url: imageUrl || newMission.imagem_url || null
       };
       
       // Add type-specific fields
@@ -202,10 +260,8 @@ export const MissionManagement = () => {
         throw error;
       }
 
-      toast({
-        title: "Missão criada",
-        description: `A missão "${newMission.titulo}" foi criada com sucesso.`,
-      });
+      // Show success dialog
+      setShowSuccessDialog(true);
       
       // Reset form
       setNewMission({
@@ -229,7 +285,9 @@ export const MissionManagement = () => {
         { text: "Opção 3", value: "opcao3" },
       ]);
       
-      setOpenDialog(false);
+      setSelectedImage(null);
+      setImagePreview(null);
+      
       loadMissions();
     } catch (error) {
       console.error("Erro ao criar missão:", error);
@@ -270,6 +328,38 @@ export const MissionManagement = () => {
     }
   };
 
+  const deleteAllMissions = async () => {
+    try {
+      setIsLoading(true);
+      
+      const { error } = await supabase
+        .from('missoes')
+        .delete()
+        .neq('id', ''); // This will delete all records
+      
+      if (error) {
+        throw error;
+      }
+      
+      toast({
+        title: "Missões excluídas",
+        description: "Todas as missões foram excluídas com sucesso.",
+      });
+      
+      setMissions([]);
+      setShowDeleteAllDialog(false);
+    } catch (error) {
+      console.error("Erro ao excluir missões:", error);
+      toast({
+        title: "Erro ao excluir missões",
+        description: "Não foi possível excluir as missões.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const getMissionTypeIcon = (type: string) => {
     switch (type) {
       case "multipla_escolha":
@@ -303,16 +393,26 @@ export const MissionManagement = () => {
 
   return (
     <>
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center flex-wrap gap-2">
+        <Button 
+          variant="destructive" 
+          onClick={() => setShowDeleteAllDialog(true)}
+          className="sm:order-2"
+        >
+          <Trash2 className="mr-2 h-4 w-4" />
+          Excluir Todas as Missões
+        </Button>
+        
         <div className="flex-1" />
+        
         <Dialog open={openDialog} onOpenChange={setOpenDialog}>
           <DialogTrigger asChild>
-            <Button>
+            <Button className="sm:order-3">
               <Plus className="mr-2 h-4 w-4" />
               Nova Missão
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-3xl">
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Criar Nova Missão</DialogTitle>
               <DialogDescription>
@@ -392,16 +492,49 @@ export const MissionManagement = () => {
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="imagem">URL da Imagem (opcional)</Label>
-                  <Input 
-                    id="imagem" 
-                    value={newMission.imagem_url || ""}
-                    onChange={(e) => setNewMission({...newMission, imagem_url: e.target.value})}
-                    placeholder="https://exemplo.com/imagem.jpg"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Adicione uma imagem ilustrativa para a missão
-                  </p>
+                  <Label htmlFor="imagem">Imagem (opcional)</Label>
+                  <div className="flex flex-col space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        className="w-full"
+                        onClick={() => document.getElementById('mission-image')?.click()}
+                      >
+                        <Upload className="mr-2 h-4 w-4" />
+                        Selecionar Imagem
+                      </Button>
+                    </div>
+                    <Input 
+                      id="mission-image" 
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleImageChange}
+                    />
+                    
+                    {imagePreview && (
+                      <div className="mt-2 relative">
+                        <img 
+                          src={imagePreview} 
+                          alt="Preview" 
+                          className="w-full h-24 object-cover rounded-md" 
+                        />
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          className="absolute top-1 right-1"
+                          onClick={() => {
+                            setSelectedImage(null);
+                            setImagePreview(null);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
               
@@ -484,9 +617,9 @@ export const MissionManagement = () => {
       
       <Card className="mt-4">
         <CardHeader>
-          <div className="flex justify-between items-center">
+          <div className="flex justify-between items-center flex-wrap gap-2">
             <CardTitle>Lista de Missões</CardTitle>
-            <div className="relative w-64">
+            <div className="relative w-full sm:w-64">
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Buscar missões"
@@ -500,15 +633,15 @@ export const MissionManagement = () => {
             Total de {filteredMissions.length} missões cadastradas no sistema
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="overflow-x-auto">
           <div className="rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Título</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Pontos</TableHead>
-                  <TableHead>Evidência</TableHead>
+                  <TableHead className="hidden sm:table-cell">Tipo</TableHead>
+                  <TableHead className="hidden sm:table-cell">Pontos</TableHead>
+                  <TableHead className="hidden sm:table-cell">Evidência</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
@@ -518,14 +651,14 @@ export const MissionManagement = () => {
                   filteredMissions.map((mission) => (
                     <TableRow key={mission.id}>
                       <TableCell className="font-medium">{mission.titulo}</TableCell>
-                      <TableCell>
+                      <TableCell className="hidden sm:table-cell">
                         <div className="flex items-center space-x-2">
                           {getMissionTypeIcon(mission.tipo)}
                           <span>{getMissionTypeName(mission.tipo)}</span>
                         </div>
                       </TableCell>
-                      <TableCell>{mission.pontos} pts</TableCell>
-                      <TableCell>
+                      <TableCell className="hidden sm:table-cell">{mission.pontos} pts</TableCell>
+                      <TableCell className="hidden sm:table-cell">
                         {mission.evidencia_obrigatoria ? "Obrigatória" : "Não obrigatória"}
                       </TableCell>
                       <TableCell>
@@ -534,7 +667,7 @@ export const MissionManagement = () => {
                             checked={mission.ativo} 
                             onCheckedChange={() => mission.id && handleToggleStatus(mission.id, mission.ativo)} 
                           />
-                          <span>{mission.ativo ? "Ativa" : "Inativa"}</span>
+                          <span className="hidden sm:inline">{mission.ativo ? "Ativa" : "Inativa"}</span>
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
@@ -558,6 +691,49 @@ export const MissionManagement = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Success Dialog */}
+      <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
+        <DialogContent>
+          <div className="flex flex-col items-center justify-center p-6 text-center">
+            <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mb-4">
+              <FileCheck2 className="h-6 w-6 text-green-600" />
+            </div>
+            <DialogTitle className="text-xl mb-2">Missão Criada com Sucesso!</DialogTitle>
+            <DialogDescription>
+              A missão foi adicionada e já está disponível para os usuários.
+            </DialogDescription>
+            <Button 
+              className="mt-6 w-full" 
+              onClick={() => {
+                setShowSuccessDialog(false);
+                setOpenDialog(false);
+              }}
+            >
+              Entendido
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete All Confirmation Dialog */}
+      <AlertDialog open={showDeleteAllDialog} onOpenChange={setShowDeleteAllDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir todas as missões?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. Isso excluirá permanentemente todas as missões 
+              cadastradas no sistema.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={deleteAllMissions} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {isLoading ? "Excluindo..." : "Sim, excluir todas"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 };
