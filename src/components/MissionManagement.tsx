@@ -288,7 +288,10 @@ export const MissionManagement = () => {
       setSelectedImage(null);
       setImagePreview(null);
       
-      loadMissions();
+      // Reload missions after a short delay
+      setTimeout(() => {
+        loadMissions();
+      }, 500);
     } catch (error) {
       console.error("Erro ao criar missão:", error);
       toast({
@@ -484,7 +487,7 @@ export const MissionManagement = () => {
                     type="number"
                     min={1}
                     value={newMission.pontos}
-                    onChange={(e) => setNewMission({...newMission, pontos: parseInt(e.target.value)})}
+                    onChange={(e) => setNewMission({...newMission, pontos: parseInt(e.target.value) || 0})}
                   />
                   <p className="text-xs text-muted-foreground">
                     Quantidade de pontos que o usuário ganhará ao completar essa missão
