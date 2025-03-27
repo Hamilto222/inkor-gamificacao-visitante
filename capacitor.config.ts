@@ -34,6 +34,15 @@ const config: CapacitorConfig = {
     },
     PushNotifications: {
       presentationOptions: ["badge", "sound", "alert"]
+    },
+    App: {
+      appName: "Inkor Tour",
+      appUrlScheme: "inkortour",
+      webDir: "dist"
+    },
+    AppUpdate: {
+      flexibleUpdateStalenessDays: 2,
+      minimumBackgroundDuration: 60
     }
   },
   android: {
@@ -57,7 +66,13 @@ const config: CapacitorConfig = {
     scrollEnabled: true,
     // Configurations for App Store
     limitsNavigationsToAppBoundDomains: true,
-    preferredContentMode: "mobile"
+    preferredContentMode: "mobile",
+    useUserAgentString: "InkorTourApp/1.0",
+    overrideUserAgent: false,
+    appendUserAgent: "InkorTourApp",
+    // Required for App Store
+    appStoreUrl: "https://apps.apple.com/app/id000000000", // Replace with actual App Store ID
+    privacyScreenEnabled: true
   }
 };
 

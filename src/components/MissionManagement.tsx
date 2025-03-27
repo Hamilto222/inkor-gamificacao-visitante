@@ -70,25 +70,35 @@ export const MissionManagement = () => {
   const loadMissions = async () => {
     try {
       setIsLoading(true);
+      console.log("Carregando missões do admin...");
+      
       const { data, error } = await supabase
         .from('missoes')
         .select('*')
         .order('data_criacao', { ascending: false });
 
       if (error) {
+        console.error("Erro ao carregar missões (admin):", error);
         throw error;
       }
 
+      console.log("Missões carregadas (admin):", data);
+      
       if (data) {
         // Transform the data to match our Mission type
         const transformedData = data.map(mission => {
           return {
             ...mission,
             // Convert opcoes to our expected format if it exists
-            opcoes: mission.opcoes ? (mission.opcoes as unknown as MissionOption[]) : null
+            opcoes: mission.opcoes ? 
+              (typeof mission.opcoes === 'string' ? 
+                JSON.parse(mission.opcoes) : 
+                mission.opcoes as unknown as MissionOption[]) 
+              : null
           };
         });
         
+        console.log("Dados transformados (admin):", transformedData);
         setMissions(transformedData as Mission[]);
       }
     } catch (error) {
@@ -167,6 +177,8 @@ export const MissionManagement = () => {
 
   const uploadImage = async (file: File): Promise<string | null> => {
     try {
+      console.log("Upload de imagem de missão iniciado");
+      
       // Create a unique filename
       const fileExt = file.name.split('.').pop();
       const fileName = `${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
@@ -178,14 +190,19 @@ export const MissionManagement = () => {
         .upload(filePath, file);
         
       if (uploadError) {
+        console.error("Erro no upload de imagem:", uploadError);
         throw uploadError;
       }
+      
+      console.log("Imagem enviada, obtendo URL...");
       
       // Get public URL
       const { data } = supabase.storage
         .from('media-files')
         .getPublicUrl(filePath);
-        
+      
+      console.log("URL da imagem obtida:", data.publicUrl);
+      
       return data.publicUrl;
     } catch (error) {
       console.error("Error uploading image:", error);
@@ -219,18 +236,30 @@ export const MissionManagement = () => {
 
     try {
       setIsLoading(true);
+      console.log("Iniciando criação de missão:", newMission);
       
       // Upload image if selected
       let imageUrl = null;
       if (selectedImage) {
+        console.log("Enviando imagem...");
         imageUrl = await uploadImage(selectedImage);
+      }
+      
+      // Map frontend types to database types
+      let dbTipo = newMission.tipo;
+      if (dbTipo === "multipla_escolha") {
+        dbTipo = "quiz";
+      } else if (dbTipo === "tarefa") {
+        dbTipo = "task";
+      } else if (dbTipo === "atividade") {
+        dbTipo = "activity";
       }
       
       // Prepare mission data for saving
       const missionData: any = {
         titulo: newMission.titulo,
         descricao: newMission.descricao,
-        tipo: newMission.tipo,
+        tipo: dbTipo,
         pontos: newMission.pontos,
         ativo: newMission.ativo,
         evidencia_obrigatoria: newMission.evidencia_obrigatoria,
@@ -244,20 +273,7 @@ export const MissionManagement = () => {
       }
 
       // Debug log to see what data we're sending
-      console.log("Saving mission data:", missionData);
-
-      // Fixed the mission types to match the database constraint (from console error)
-      // Ensure tipo is one of the allowed values in the database
-      if (!["quiz", "task", "activity"].includes(missionData.tipo)) {
-        // Map our frontend types to database types
-        if (missionData.tipo === "multipla_escolha") {
-          missionData.tipo = "quiz";
-        } else if (missionData.tipo === "tarefa") {
-          missionData.tipo = "task";
-        } else if (missionData.tipo === "atividade") {
-          missionData.tipo = "activity";
-        }
-      }
+      console.log("Dados da missão para salvar:", missionData);
 
       const { data, error } = await supabase
         .from('missoes')
@@ -265,11 +281,11 @@ export const MissionManagement = () => {
         .select();
 
       if (error) {
-        console.error("Supabase error:", error);
+        console.error("Erro ao inserir missão:", error);
         throw error;
       }
 
-      console.log("Mission saved successfully:", data);
+      console.log("Missão criada com sucesso:", data);
 
       // Show success dialog
       setShowSuccessDialog(true);
@@ -317,15 +333,21 @@ export const MissionManagement = () => {
 
   const handleToggleStatus = async (id: string, currentStatus: boolean) => {
     try {
+      console.log(`Alternando status da missão ${id} de ${currentStatus} para ${!currentStatus}`);
+      setIsLoading(true);
+      
       const { error } = await supabase
         .from('missoes')
         .update({ ativo: !currentStatus })
         .eq('id', id);
 
       if (error) {
+        console.error("Erro ao alternar status:", error);
         throw error;
       }
 
+      console.log("Status da missão atualizado com sucesso");
+      
       toast({
         title: currentStatus ? "Missão desativada" : "Missão ativada",
         description: `A missão foi ${currentStatus ? "desativada" : "ativada"} com sucesso.`,
@@ -339,12 +361,15 @@ export const MissionManagement = () => {
         description: "Não foi possível atualizar o status da missão.",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const deleteAllMissions = async () => {
     try {
       setIsLoading(true);
+      console.log("Excluindo todas as missões...");
       
       const { error } = await supabase
         .from('missoes')
@@ -352,8 +377,11 @@ export const MissionManagement = () => {
         .neq('id', ''); // This will delete all records
       
       if (error) {
+        console.error("Erro ao excluir missões:", error);
         throw error;
       }
+      
+      console.log("Todas as missões foram excluídas com sucesso");
       
       toast({
         title: "Missões excluídas",
@@ -377,10 +405,13 @@ export const MissionManagement = () => {
   const getMissionTypeIcon = (type: string) => {
     switch (type) {
       case "multipla_escolha":
+      case "quiz":
         return <HelpCircle className="h-4 w-4" />;
       case "atividade":
+      case "activity":
         return <Activity className="h-4 w-4" />;
       case "tarefa":
+      case "task":
         return <ListChecks className="h-4 w-4" />;
       default:
         return null;
@@ -390,10 +421,13 @@ export const MissionManagement = () => {
   const getMissionTypeName = (type: string) => {
     switch (type) {
       case "multipla_escolha":
+      case "quiz":
         return "Pergunta de Múltipla Escolha";
       case "atividade":
+      case "activity":
         return "Atividade";
       case "tarefa":
+      case "task":
         return "Tarefa";
       default:
         return type;
@@ -401,8 +435,8 @@ export const MissionManagement = () => {
   };
 
   const filteredMissions = missions.filter(mission => 
-    mission.titulo.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    mission.descricao.toLowerCase().includes(searchTerm.toLowerCase())
+    mission.titulo?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    mission.descricao?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -426,7 +460,7 @@ export const MissionManagement = () => {
               Nova Missão
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto dialog-overflow-fix">
             <DialogHeader>
               <DialogTitle>Criar Nova Missão</DialogTitle>
               <DialogDescription>

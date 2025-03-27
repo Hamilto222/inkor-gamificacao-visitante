@@ -13,13 +13,14 @@ import Scanner from "./pages/Scanner";
 import NotFound from "./pages/NotFound";
 import Products from "./pages/Products";
 import "./App.css";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { isMobileApp } from "./hooks/use-mobile";
-import { getCapacitor, setStatusBarStyle } from "./capacitor";
+import { getCapacitor, setStatusBarStyle, getDeviceInfo } from "./capacitor";
 
 function App() {
   // Detect if we're running as a mobile app
   const isMobile = isMobileApp();
+  const [devicePlatform, setDevicePlatform] = useState<string | null>(null);
   
   // Set mobile class on body for global styling
   useEffect(() => {
@@ -29,11 +30,37 @@ function App() {
       // If running as a Capacitor app, configure native elements
       const capacitor = getCapacitor();
       if (capacitor) {
+        console.log("Capacitor detected, initializing native features");
+        
         // Set status bar style for mobile devices
         setStatusBarStyle('dark');
         
+        // Get device info
+        const getInfo = async () => {
+          try {
+            const info = await getDeviceInfo();
+            if (info) {
+              setDevicePlatform(info.platform);
+              console.log("Device platform:", info.platform);
+              
+              if (info.platform === 'ios') {
+                document.body.classList.add('ios-device');
+              } else if (info.platform === 'android') {
+                document.body.classList.add('android-device');
+              }
+            }
+          } catch (error) {
+            console.error("Error getting device info:", error);
+          }
+        };
+        
+        getInfo();
+        
         // Add listener for device orientation changes
         window.addEventListener('resize', handleOrientationChange);
+        
+        // Initial orientation check
+        handleOrientationChange();
         
         return () => {
           window.removeEventListener('resize', handleOrientationChange);
@@ -54,6 +81,15 @@ function App() {
     } else {
       document.body.classList.add('portrait');
       document.body.classList.remove('landscape');
+    }
+    
+    // Adjust viewport for iOS
+    if (devicePlatform === 'ios') {
+      // Force redraw on iOS to fix layout issues
+      document.body.style.display = 'none';
+      setTimeout(() => {
+        document.body.style.display = '';
+      }, 20);
     }
   };
 

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { Card } from "@/components/ui/card";
@@ -11,7 +12,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Medal, Activity, HandIcon, HelpCircle, ListChecks, Upload, Camera, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { vibrateDevice } from "@/capacitor";
+import { vibrateDevice, takePhoto } from "@/capacitor";
+import { isMobileApp } from "@/hooks/use-mobile";
 
 interface MissionOption {
   text: string;
@@ -47,16 +49,25 @@ const Missions = () => {
   const [evidenceRequired, setEvidenceRequired] = useState<boolean>(false);
   const [missions, setMissions] = useState<Mission[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const isApp = isMobileApp();
 
   useEffect(() => {
     const currentUserStr = localStorage.getItem('currentUser');
     if (currentUserStr) {
-      const currentUser = JSON.parse(currentUserStr);
-      setUserMatricula(currentUser.matricula);
-      
-      loadCompletedMissions(currentUser.matricula);
-      
-      loadUserPoints(currentUser.matricula);
+      try {
+        const currentUser = JSON.parse(currentUserStr);
+        setUserMatricula(currentUser.matricula);
+        
+        loadCompletedMissions(currentUser.matricula);
+        loadUserPoints(currentUser.matricula);
+      } catch (error) {
+        console.error("Error parsing user data:", error);
+        toast({
+          title: "Erro ao carregar dados do usuário",
+          description: "Por favor, faça login novamente.",
+          variant: "destructive"
+        });
+      }
     }
 
     loadMissions();
@@ -65,16 +76,25 @@ const Missions = () => {
   const loadMissions = async () => {
     try {
       setIsLoading(true);
+      console.log("Carregando missões...");
+      
       const { data, error } = await supabase
         .from('missoes')
         .select('*')
         .eq('ativo', true);
       
-      if (error) throw error;
+      if (error) {
+        console.error("Erro Supabase:", error);
+        throw error;
+      }
+      
+      console.log("Missões carregadas:", data);
       
       if (data) {
         const transformedData = data.map(mission => {
           let missionType = mission.tipo;
+          
+          // Normalize mission types
           if (mission.tipo === "quiz") {
             missionType = "multipla_escolha";
           } else if (mission.tipo === "task") {
@@ -87,10 +107,11 @@ const Missions = () => {
             ...mission,
             tipo: missionType,
             detailedDescription: mission.descricao,
-            opcoes: mission.opcoes ? (mission.opcoes as unknown as MissionOption[]) : null
+            opcoes: mission.opcoes ? (Array.isArray(mission.opcoes) ? mission.opcoes : JSON.parse(mission.opcoes as unknown as string)) : null
           };
         });
         
+        console.log("Dados transformados:", transformedData);
         setMissions(transformedData);
       }
     } catch (error: any) {
@@ -107,12 +128,19 @@ const Missions = () => {
 
   const loadCompletedMissions = async (matricula: string) => {
     try {
+      console.log("Carregando missões completadas para:", matricula);
+      
       const { data, error } = await supabase
         .from('missoes_completadas')
         .select('missao_id')
         .eq('matricula', matricula);
       
-      if (error) throw error;
+      if (error) {
+        console.error("Erro ao carregar missões completadas:", error);
+        throw error;
+      }
+      
+      console.log("Missões completadas:", data);
       
       if (data) {
         setCompletedMissions(data.map(item => item.missao_id));
@@ -124,21 +152,33 @@ const Missions = () => {
 
   const loadUserPoints = async (matricula: string) => {
     try {
+      console.log("Carregando pontos para usuário:", matricula);
+      
       const { data, error } = await supabase
         .from('pontos_usuarios')
         .select('total_pontos')
         .eq('matricula', matricula);
       
-      if (error) throw error;
+      if (error) {
+        console.error("Erro ao carregar pontos:", error);
+        throw error;
+      }
+      
+      console.log("Pontos do usuário:", data);
       
       if (data && data.length > 0) {
         setUserPoints(data[0].total_pontos);
       } else {
+        console.log("Criando novo registro de pontos para:", matricula);
+        
         const { error: insertError } = await supabase
           .from('pontos_usuarios')
           .insert([{ matricula: matricula, total_pontos: 0 }]);
         
-        if (insertError) throw insertError;
+        if (insertError) {
+          console.error("Erro ao criar pontos:", insertError);
+          throw insertError;
+        }
         
         setUserPoints(0);
       }
@@ -160,6 +200,33 @@ const Missions = () => {
     }
   };
 
+  const capturePhoto = async () => {
+    if (!isApp) {
+      document.getElementById('evidence')?.click();
+      return;
+    }
+    
+    try {
+      const photo = await takePhoto();
+      if (photo && photo.base64String) {
+        setEvidenceBase64(photo.base64String);
+        
+        // Convert base64 to file
+        const res = await fetch(photo.base64String);
+        const blob = await res.blob();
+        const file = new File([blob], `evidence-${Date.now()}.jpeg`, { type: 'image/jpeg' });
+        setEvidenceImage(file);
+      }
+    } catch (error) {
+      console.error("Error taking photo:", error);
+      toast({
+        title: "Erro ao capturar foto",
+        description: "Não foi possível acessar a câmera.",
+        variant: "destructive"
+      });
+    }
+  };
+
   const handleCompleteMission = async () => {
     if (!selectedMission) return;
     
@@ -172,27 +239,42 @@ const Missions = () => {
       return;
     }
     
-    if (!answer) {
+    if (selectedMission.tipo === "multipla_escolha" && !answer) {
       toast({
         title: "Resposta necessária",
-        description: "Por favor, forneça uma resposta para a missão.",
+        description: "Por favor, selecione uma das opções para continuar.",
+        variant: "destructive",
+      });
+      return;
+    } else if (selectedMission.tipo !== "multipla_escolha" && !answer) {
+      toast({
+        title: "Resposta necessária",
+        description: "Por favor, forneça uma descrição de como você completou a missão.",
         variant: "destructive",
       });
       return;
     }
     
     try {
+      console.log("Completando missão:", selectedMission);
+      
       let evidenceUrl = null;
       
       if (evidenceImage) {
-        const filename = `${Date.now()}-${evidenceImage.name}`;
+        console.log("Fazendo upload de evidência...");
+        const filename = `mission-evidence/${Date.now()}-${userMatricula}.jpg`;
+        
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('media-files')
           .upload(filename, evidenceImage);
         
-        if (uploadError) throw uploadError;
+        if (uploadError) {
+          console.error("Erro no upload:", uploadError);
+          throw uploadError;
+        }
         
         if (uploadData) {
+          console.log("Upload concluído:", uploadData);
           evidenceUrl = uploadData.path;
         }
       }
@@ -212,6 +294,7 @@ const Missions = () => {
         });
       }
       
+      console.log("Salvando missão concluída...");
       const { error: missionError } = await supabase
         .from('missoes_completadas')
         .insert([
@@ -224,14 +307,21 @@ const Missions = () => {
           }
         ]);
       
-      if (missionError) throw missionError;
+      if (missionError) {
+        console.error("Erro ao salvar missão:", missionError);
+        throw missionError;
+      }
       
+      console.log("Atualizando pontos...");
       const { data: pointsData, error: pointsError } = await supabase
         .from('pontos_usuarios')
         .select('total_pontos')
         .eq('matricula', userMatricula);
       
-      if (pointsError) throw pointsError;
+      if (pointsError) {
+        console.error("Erro ao buscar pontos:", pointsError);
+        throw pointsError;
+      }
       
       let newTotalPoints = selectedMission.pontos;
       
@@ -243,7 +333,10 @@ const Missions = () => {
           .update({ total_pontos: newTotalPoints })
           .eq('matricula', userMatricula);
         
-        if (updateError) throw updateError;
+        if (updateError) {
+          console.error("Erro ao atualizar pontos:", updateError);
+          throw updateError;
+        }
       } else {
         const { error: insertError } = await supabase
           .from('pontos_usuarios')
@@ -252,7 +345,10 @@ const Missions = () => {
             total_pontos: selectedMission.pontos 
           }]);
         
-        if (insertError) throw insertError;
+        if (insertError) {
+          console.error("Erro ao inserir pontos:", insertError);
+          throw insertError;
+        }
       }
       
       setUserPoints(newTotalPoints);
@@ -282,6 +378,9 @@ const Missions = () => {
   const handleStartMission = (mission: Mission) => {
     setSelectedMission(mission);
     setEvidenceRequired(mission.evidencia_obrigatoria);
+    setAnswer("");
+    setEvidenceImage(null);
+    setEvidenceBase64(null);
     setOpenDialog(true);
     
     vibrateDevice(200);
@@ -342,7 +441,7 @@ const Missions = () => {
               <div className="grid sm:grid-cols-2 gap-4">
                 {availableMissions.length > 0 ? (
                   availableMissions.map((mission) => (
-                    <Card key={mission.id} className="glass-card p-6 space-y-4 hover:scale-[1.02] transition-transform">
+                    <Card key={mission.id} className="glass-card p-6 space-y-4 hover:scale-[1.02] transition-transform mission-card">
                       <div className="space-y-4">
                         <div className="flex items-start gap-4">
                           <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -350,7 +449,7 @@ const Missions = () => {
                           </div>
                           <div className="space-y-2 flex-1">
                             <h3 className="font-semibold">{mission.titulo}</h3>
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-sm text-muted-foreground mission-description">
                               {mission.descricao}
                             </p>
                             <div className="flex items-center gap-1 text-primary font-medium">
@@ -396,7 +495,7 @@ const Missions = () => {
             <div className="grid sm:grid-cols-2 gap-4">
               {completedMissionsList.length > 0 ? (
                 completedMissionsList.map((mission) => (
-                  <Card key={mission.id} className="glass-card p-6 space-y-4 border-green-500/30 bg-green-50/30 dark:bg-green-950/10">
+                  <Card key={mission.id} className="glass-card p-6 space-y-4 border-green-500/30 bg-green-50/30 dark:bg-green-950/10 mission-card">
                     <div className="space-y-4">
                       <div className="flex items-start gap-4">
                         <div className="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center flex-shrink-0">
@@ -409,7 +508,7 @@ const Missions = () => {
                               Completada
                             </span>
                           </h3>
-                          <p className="text-sm text-muted-foreground">
+                          <p className="text-sm text-muted-foreground mission-description">
                             {mission.descricao}
                           </p>
                           <div className="flex items-center gap-1 text-green-600 font-medium">
@@ -433,7 +532,7 @@ const Missions = () => {
         </Tabs>
 
         <Dialog open={openDialog} onOpenChange={setOpenDialog}>
-          <DialogContent className="max-w-md w-[95%] mx-auto">
+          <DialogContent className="max-w-md w-[95%] mx-auto dialog-overflow-fix">
             <DialogHeader>
               <DialogTitle>{selectedMission?.titulo}</DialogTitle>
               <DialogDescription>
@@ -477,13 +576,26 @@ const Missions = () => {
                   {evidenceRequired ? "Evidência (obrigatória)" : "Evidência (opcional)"}
                 </Label>
                 <div className="grid gap-4">
-                  <Input
-                    id="evidence"
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageChange}
-                    required={evidenceRequired}
-                  />
+                  <div className="flex items-center mission-options gap-2">
+                    <Button 
+                      variant="outline" 
+                      type="button" 
+                      onClick={capturePhoto} 
+                      className="flex-1"
+                    >
+                      <Camera className="mr-2 h-4 w-4" />
+                      {isApp ? "Tirar Foto" : "Selecionar"}
+                    </Button>
+                    
+                    <Input
+                      id="evidence"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageChange}
+                      required={evidenceRequired}
+                      className="hidden"
+                    />
+                  </div>
                   
                   {evidenceBase64 && (
                     <div className="mt-2">
