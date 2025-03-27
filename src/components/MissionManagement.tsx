@@ -241,13 +241,23 @@ export const MissionManagement = () => {
       if (newMission.tipo === "multipla_escolha") {
         missionData.opcoes = newMission.opcoes;
         missionData.resposta_correta = newMission.resposta_correta;
-      } else {
-        // For other types, we don't need these fields
-        missionData.opcoes = null;
-        missionData.resposta_correta = null;
       }
 
+      // Debug log to see what data we're sending
       console.log("Saving mission data:", missionData);
+
+      // Fixed the mission types to match the database constraint (from console error)
+      // Ensure tipo is one of the allowed values in the database
+      if (!["quiz", "task", "activity"].includes(missionData.tipo)) {
+        // Map our frontend types to database types
+        if (missionData.tipo === "multipla_escolha") {
+          missionData.tipo = "quiz";
+        } else if (missionData.tipo === "tarefa") {
+          missionData.tipo = "task";
+        } else if (missionData.tipo === "atividade") {
+          missionData.tipo = "activity";
+        }
+      }
 
       const { data, error } = await supabase
         .from('missoes')

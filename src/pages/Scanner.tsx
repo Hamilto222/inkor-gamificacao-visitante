@@ -1,138 +1,133 @@
 
 import React, { useState, useEffect } from "react";
 import { Layout } from "@/components/Layout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Camera, QrCode, VibrateIcon } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { QrCode, Camera, VibrateIcon, Check, AlertCircle } from "lucide-react";
+import { scanBarcode, vibrateDevice, takePhoto } from "@/capacitor";
 import { useToast } from "@/hooks/use-toast";
-import { AuthGuard } from "@/components/AuthGuard";
-import { isMobileApp } from "@/hooks/use-mobile";
 
 const Scanner = () => {
-  const [scanning, setScanning] = useState(false);
-  const [scannedCode, setScannedCode] = useState<string | null>(null);
-  const [hasCamera, setHasCamera] = useState(false);
-  const isApp = isMobileApp();
+  const [scanResult, setScanResult] = useState<string | null>(null);
+  const [scanSuccess, setScanSuccess] = useState<boolean | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  // Check for camera availability
-  useEffect(() => {
-    const checkCamera = async () => {
-      try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        setHasCamera(devices.some(device => device.kind === 'videoinput'));
-      } catch (error) {
-        console.error('Error checking camera:', error);
-        setHasCamera(false);
+  const handleScan = async () => {
+    try {
+      setIsLoading(true);
+      setScanResult(null);
+      setScanSuccess(null);
+      
+      // Attempt to scan barcode using native camera
+      const result = await scanBarcode();
+      
+      if (result && result.content) {
+        // Provide haptic feedback on successful scan
+        vibrateDevice(300);
+        
+        setScanResult(result.content);
+        
+        // Here you would validate the QR code against your backend
+        // For demo, we'll just set success to true if it contains "inkor"
+        const isValid = result.content.toLowerCase().includes("inkor");
+        setScanSuccess(isValid);
+        
+        toast({
+          title: isValid ? "Código válido!" : "Código inválido",
+          description: isValid 
+            ? "O código foi escaneado com sucesso." 
+            : "Este código não é válido para o sistema.",
+          variant: isValid ? "default" : "destructive",
+        });
+      } else {
+        setScanSuccess(false);
+        toast({
+          title: "Escaneamento cancelado",
+          description: "O escaneamento foi cancelado ou não detectou um código.",
+          variant: "destructive",
+        });
       }
-    };
-    
-    checkCamera();
-  }, []);
-
-  // Simulating QR code scanning functionality
-  // In a real app, you would integrate with a camera/QR scanning library
-  const startScanning = () => {
-    setScanning(true);
-    
-    // Simulate scanning process with timeout
-    setTimeout(() => {
-      const codes = [
-        "QR001: Setor de Tintas - Sabia que misturamos mais de 3.000 cores diferentes?",
-        "QR002: Laboratório - Nossos produtos passam por mais de 20 testes de qualidade!",
-        "QR003: Linha de Produção - Produzimos mais de 500.000 litros por mês!",
-        "QR004: Armazenamento - Nossa logística entrega em todo o Brasil em até 72h!"
-      ];
-      
-      const randomCode = codes[Math.floor(Math.random() * codes.length)];
-      setScannedCode(randomCode);
-      setScanning(false);
-      
-      // Vibrate device if supported (for mobile feedback)
-      if (isApp && 'vibrate' in navigator) {
-        navigator.vibrate(200);
-      }
-      
+    } catch (error) {
+      console.error("Erro ao escanear:", error);
       toast({
-        title: "QR Code detectado!",
-        description: "Escaneado com sucesso!",
+        title: "Erro no escaneamento",
+        description: "Não foi possível acessar a câmera ou escanear o código.",
+        variant: "destructive",
       });
-    }, 2000);
+      setScanSuccess(false);
+    } finally {
+      setIsLoading(false);
+    }
   };
-  
-  // In a real implementation, for mobile native features, you would use:
-  // - Capacitor/Cordova BarcodeScanner plugin for actual QR scanning
-  // - Device vibration for feedback
-  // - Access to camera permissions properly
 
   return (
-    <AuthGuard>
-      <Layout>
-        <div className="max-w-xl mx-auto space-y-6">
-          <header className="text-center space-y-4">
-            <h1 className="text-2xl md:text-3xl font-bold flex items-center justify-center gap-2">
-              <QrCode className="h-7 w-7" />
+    <Layout>
+      <div className="container max-w-md mx-auto space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <QrCode className="h-6 w-6" />
               Scanner QR Code
-            </h1>
-            <p className="text-sm md:text-base text-muted-foreground">
-              Escaneie os QR Codes espalhados pela fábrica para desbloquear informações e ganhar pontos
-            </p>
-          </header>
-          
-          <Card className="glass-card shadow-lg">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xl">Câmera</CardTitle>
-              <CardDescription>
-                Posicione o QR Code dentro da área de leitura
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="border-2 border-dashed border-primary/50 rounded-lg h-48 md:h-64 flex items-center justify-center bg-muted/30 relative overflow-hidden">
-                {scanning ? (
-                  <div className="text-center">
-                    <Camera className="h-12 w-12 mx-auto mb-4 animate-pulse text-primary" />
-                    <p>Escaneando...</p>
-                  </div>
-                ) : scannedCode ? (
-                  <div className="text-center p-4">
-                    <QrCode className="h-10 w-10 mx-auto mb-4 text-primary" />
-                    <h3 className="font-medium text-lg mb-2">Informação Desbloqueada!</h3>
-                    <p className="text-muted-foreground text-sm">{scannedCode}</p>
-                  </div>
-                ) : (
-                  <div className="text-center p-4">
-                    <QrCode className="h-10 w-10 mx-auto mb-4 text-muted-foreground" />
-                    <p>Nenhum QR Code detectado</p>
-                    {!hasCamera && (
-                      <p className="text-sm text-muted-foreground mt-2">
-                        {isApp ? "Acesso à câmera negado" : "Câmera não detectada"}
-                      </p>
+            </CardTitle>
+            <CardDescription>
+              Escaneie QR codes para check-in ou acessar conteúdo especial
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="text-center py-8 px-4 border-2 border-dashed rounded-lg">
+              {scanResult ? (
+                <div className="space-y-4">
+                  <div className={`p-4 rounded-full inline-flex items-center justify-center ${
+                    scanSuccess ? "bg-green-100 text-green-600" : "bg-red-100 text-red-600"
+                  }`}>
+                    {scanSuccess ? (
+                      <Check className="h-10 w-10" />
+                    ) : (
+                      <AlertCircle className="h-10 w-10" />
                     )}
                   </div>
-                )}
-              </div>
-              
-              <div className="flex justify-center">
-                <Button 
-                  size="lg" 
-                  disabled={scanning}
-                  onClick={startScanning}
-                  className="w-full sm:w-auto"
-                >
-                  {scanning ? "Escaneando..." : "Iniciar Scanner"}
-                </Button>
-              </div>
-              
-              {isApp && (
-                <p className="text-xs text-center text-muted-foreground mt-2">
-                  Permita o acesso à câmera para escanear QR codes
-                </p>
+                  <p className="text-sm text-muted-foreground">
+                    {scanSuccess ? "Código válido!" : "Código inválido"}
+                  </p>
+                  <div className="bg-muted p-3 rounded-md overflow-x-auto">
+                    <code className="text-xs">{scanResult}</code>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="p-4 rounded-full bg-muted inline-flex items-center justify-center">
+                    <Camera className="h-10 w-10 text-muted-foreground" />
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Nenhum código escaneado ainda. Clique no botão abaixo para iniciar.
+                  </p>
+                </div>
               )}
-            </CardContent>
-          </Card>
-        </div>
-      </Layout>
-    </AuthGuard>
+            </div>
+            
+            <Button 
+              onClick={handleScan}
+              disabled={isLoading}
+              className="w-full py-6"
+            >
+              {isLoading ? (
+                "Escaneando..."
+              ) : (
+                <>
+                  <VibrateIcon className="mr-2 h-5 w-5" />
+                  Escanear QR Code
+                </>
+              )}
+            </Button>
+            
+            <p className="text-xs text-center text-muted-foreground">
+              Posicione o QR code no centro da câmera para escaneá-lo automaticamente.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    </Layout>
   );
 };
 

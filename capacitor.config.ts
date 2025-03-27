@@ -20,13 +20,44 @@ const config: CapacitorConfig = {
     StatusBar: {
       style: "dark",
       backgroundColor: "#FFFFFF"
+    },
+    CapacitorHttp: {
+      enabled: true
+    },
+    // Add more plugin configurations for app store requirements
+    CapacitorCookies: {
+      enabled: true
+    },
+    LocalNotifications: {
+      smallIcon: "ic_stat_icon",
+      iconColor: "#C10519"
+    },
+    PushNotifications: {
+      presentationOptions: ["badge", "sound", "alert"]
     }
   },
   android: {
-    backgroundColor: "#FFFFFF"
+    backgroundColor: "#FFFFFF",
+    allowMixedContent: true,
+    captureInput: true,
+    webContentsDebuggingEnabled: false,
+    // Configurations for Play Store
+    buildOptions: {
+      keystorePath: null, // Set this in your build environment
+      keystorePassword: null, // Set this in your build environment
+      keystoreAlias: null, // Set this in your build environment
+      keystoreAliasPassword: null, // Set this in your build environment
+      releaseType: "production" // or "development" for testing
+    }
   },
   ios: {
-    backgroundColor: "#FFFFFF"
+    backgroundColor: "#FFFFFF",
+    contentInset: "always",
+    allowsLinkPreview: false,
+    scrollEnabled: true,
+    // Configurations for App Store
+    limitsNavigationsToAppBoundDomains: true,
+    preferredContentMode: "mobile"
   }
 };
 

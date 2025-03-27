@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { Card } from "@/components/ui/card";
@@ -12,6 +11,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Medal, Activity, HandIcon, HelpCircle, ListChecks, Upload, Camera, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { vibrateDevice } from "@/capacitor";
 
 interface MissionOption {
   text: string;
@@ -49,20 +49,16 @@ const Missions = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    // Load the current user's matricula
     const currentUserStr = localStorage.getItem('currentUser');
     if (currentUserStr) {
       const currentUser = JSON.parse(currentUserStr);
       setUserMatricula(currentUser.matricula);
       
-      // Load completed missions
       loadCompletedMissions(currentUser.matricula);
       
-      // Load user points
       loadUserPoints(currentUser.matricula);
     }
 
-    // Load all available missions
     loadMissions();
   }, []);
 
@@ -77,13 +73,20 @@ const Missions = () => {
       if (error) throw error;
       
       if (data) {
-        // Transform the data to match our Mission type
         const transformedData = data.map(mission => {
+          let missionType = mission.tipo;
+          if (mission.tipo === "quiz") {
+            missionType = "multipla_escolha";
+          } else if (mission.tipo === "task") {
+            missionType = "tarefa";
+          } else if (mission.tipo === "activity") {
+            missionType = "atividade";
+          }
+          
           return {
             ...mission,
-            // For backwards compatibility
+            tipo: missionType,
             detailedDescription: mission.descricao,
-            // Convert opcoes to our expected format if it exists
             opcoes: mission.opcoes ? (mission.opcoes as unknown as MissionOption[]) : null
           };
         });
@@ -121,7 +124,6 @@ const Missions = () => {
 
   const loadUserPoints = async (matricula: string) => {
     try {
-      // Check if there's an existing record for the user
       const { data, error } = await supabase
         .from('pontos_usuarios')
         .select('total_pontos')
@@ -132,7 +134,6 @@ const Missions = () => {
       if (data && data.length > 0) {
         setUserPoints(data[0].total_pontos);
       } else {
-        // If not, create a record with 0 points
         const { error: insertError } = await supabase
           .from('pontos_usuarios')
           .insert([{ matricula: matricula, total_pontos: 0 }]);
@@ -151,7 +152,6 @@ const Missions = () => {
       const file = e.target.files[0];
       setEvidenceImage(file);
       
-      // Convert image to base64 for display
       const reader = new FileReader();
       reader.onload = () => {
         setEvidenceBase64(reader.result as string);
@@ -163,7 +163,6 @@ const Missions = () => {
   const handleCompleteMission = async () => {
     if (!selectedMission) return;
     
-    // Check if evidence is required
     if (evidenceRequired && !evidenceImage) {
       toast({
         title: "Evidência necessária",
@@ -173,7 +172,6 @@ const Missions = () => {
       return;
     }
     
-    // Check if an answer was provided
     if (!answer) {
       toast({
         title: "Resposta necessária",
@@ -186,7 +184,6 @@ const Missions = () => {
     try {
       let evidenceUrl = null;
       
-      // Upload image if one was provided
       if (evidenceImage) {
         const filename = `${Date.now()}-${evidenceImage.name}`;
         const { data: uploadData, error: uploadError } = await supabase.storage
@@ -200,7 +197,6 @@ const Missions = () => {
         }
       }
       
-      // Check if the user exists in the matriculas table
       const { data: matriculaData, error: matriculaError } = await supabase
         .from('matriculas_funcionarios')
         .select('numero_matricula')
@@ -208,10 +204,14 @@ const Missions = () => {
         .single();
       
       if (matriculaError) {
-        throw new Error("Matrícula não encontrada no sistema. Por favor, contate o administrador.");
+        console.error("Error checking matricula:", matriculaError);
+        toast({
+          title: "Aviso",
+          description: "Sua matrícula não foi encontrada no sistema, mas a missão será registrada.",
+          variant: "default",
+        });
       }
       
-      // Record mission completion
       const { error: missionError } = await supabase
         .from('missoes_completadas')
         .insert([
@@ -226,7 +226,6 @@ const Missions = () => {
       
       if (missionError) throw missionError;
       
-      // Check if the user already has points
       const { data: pointsData, error: pointsError } = await supabase
         .from('pontos_usuarios')
         .select('total_pontos')
@@ -239,7 +238,6 @@ const Missions = () => {
       if (pointsData && pointsData.length > 0) {
         newTotalPoints = (pointsData[0].total_pontos || 0) + selectedMission.pontos;
         
-        // Update user points
         const { error: updateError } = await supabase
           .from('pontos_usuarios')
           .update({ total_pontos: newTotalPoints })
@@ -247,7 +245,6 @@ const Missions = () => {
         
         if (updateError) throw updateError;
       } else {
-        // Create new points record
         const { error: insertError } = await supabase
           .from('pontos_usuarios')
           .insert([{ 
@@ -258,24 +255,25 @@ const Missions = () => {
         if (insertError) throw insertError;
       }
       
-      // Update states
       setUserPoints(newTotalPoints);
       setCompletedMissions([...completedMissions, selectedMission.id!]);
+      
+      vibrateDevice(500);
       
       toast({
         title: "Missão completada!",
         description: `Você ganhou ${selectedMission.pontos} pontos pela conclusão da missão "${selectedMission.titulo}".`,
       });
       
-      // Clear form data
       setEvidenceImage(null);
       setEvidenceBase64(null);
       setAnswer("");
       setOpenDialog(false);
     } catch (error: any) {
+      console.error("Complete mission error:", error);
       toast({
         title: "Erro ao completar missão",
-        description: error.message,
+        description: error.message || "Ocorreu um erro ao registrar a missão",
         variant: "destructive",
       });
     }
@@ -285,6 +283,8 @@ const Missions = () => {
     setSelectedMission(mission);
     setEvidenceRequired(mission.evidencia_obrigatoria);
     setOpenDialog(true);
+    
+    vibrateDevice(200);
   };
 
   const isMissionCompleted = (missionId?: string) => {
@@ -433,7 +433,7 @@ const Missions = () => {
         </Tabs>
 
         <Dialog open={openDialog} onOpenChange={setOpenDialog}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-md w-[95%] mx-auto">
             <DialogHeader>
               <DialogTitle>{selectedMission?.titulo}</DialogTitle>
               <DialogDescription>
@@ -499,11 +499,12 @@ const Missions = () => {
               </div>
             </div>
             
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setOpenDialog(false)}>Cancelar</Button>
+            <DialogFooter className="flex-col sm:flex-row gap-2">
+              <Button variant="outline" onClick={() => setOpenDialog(false)} className="w-full sm:w-auto">Cancelar</Button>
               <Button 
                 onClick={handleCompleteMission}
                 disabled={!answer || (evidenceRequired && !evidenceImage)}
+                className="w-full sm:w-auto"
               >
                 <Upload className="mr-2 h-4 w-4" />
                 Completar Missão

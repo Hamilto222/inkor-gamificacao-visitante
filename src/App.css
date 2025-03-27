@@ -26,6 +26,7 @@ body {
 
 .mobile-app button {
   touch-action: manipulation;
+  min-height: 44px; /* Better touch targets */
 }
 
 .mobile-app input,
@@ -37,7 +38,6 @@ body {
 /* Improve touch targets for mobile */
 .mobile-app .card-header,
 .mobile-app .form-control,
-.mobile-app button,
 .mobile-app a {
   min-height: 44px;
 }
@@ -49,6 +49,15 @@ body {
 
 /* Fix for bottom bar in iOS */
 .mobile-app .layout-container {
+  padding-bottom: env(safe-area-inset-bottom, 20px);
+}
+
+/* Safe area insets for notches */
+.mobile-app header {
+  padding-top: env(safe-area-inset-top, 20px);
+}
+
+.mobile-app footer {
   padding-bottom: env(safe-area-inset-bottom, 20px);
 }
 
@@ -64,21 +73,70 @@ body {
   margin: 0 auto;
 }
 
+/* Mobile-specific form improvements */
+.mobile-app form label {
+  margin-bottom: 8px;
+  display: block;
+}
+
+.mobile-app .form-field {
+  margin-bottom: 20px;
+}
+
+/* Fix for iOS button styling */
+.mobile-app button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Mobile responsive tables */
 @media (max-width: 640px) {
-  .card-header {
+  .mobile-app .table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .mobile-app .card-header {
     padding: 1rem;
   }
   
-  .card-content {
+  .mobile-app .card-content {
     padding: 1rem;
   }
   
-  h1 {
+  .mobile-app h1 {
     font-size: 1.5rem;
   }
   
-  .spacing-y-4 {
+  .mobile-app .spacing-y-4 {
     margin-top: 0.75rem;
     margin-bottom: 0.75rem;
   }
+  
+  /* Improve mobile dialogs */
+  .mobile-app .dialog-footer {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .mobile-app .dialog-footer button {
+    width: 100%;
+  }
+}
+
+/* Status bar coloring for iOS devices */
+@supports (-webkit-touch-callout: none) {
+  .mobile-app .status-bar-padding {
+    padding-top: env(safe-area-inset-top);
+  }
+}
+
+/* Animation for mobile feedback */
+@keyframes mobile-feedback {
+  0% { opacity: 0.5; transform: scale(0.95); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.mobile-app .feedback-animation {
+  animation: mobile-feedback 0.3s ease-out;
 }

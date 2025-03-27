@@ -15,6 +15,7 @@ import Products from "./pages/Products";
 import "./App.css";
 import { useEffect } from "react";
 import { isMobileApp } from "./hooks/use-mobile";
+import { getCapacitor, setStatusBarStyle } from "./capacitor";
 
 function App() {
   // Detect if we're running as a mobile app
@@ -24,10 +25,37 @@ function App() {
   useEffect(() => {
     if (isMobile) {
       document.body.classList.add('mobile-app');
+      
+      // If running as a Capacitor app, configure native elements
+      const capacitor = getCapacitor();
+      if (capacitor) {
+        // Set status bar style for mobile devices
+        setStatusBarStyle('dark');
+        
+        // Add listener for device orientation changes
+        window.addEventListener('resize', handleOrientationChange);
+        
+        return () => {
+          window.removeEventListener('resize', handleOrientationChange);
+        };
+      }
     } else {
       document.body.classList.remove('mobile-app');
     }
   }, [isMobile]);
+  
+  // Handle device orientation changes
+  const handleOrientationChange = () => {
+    // Update layout based on orientation if needed
+    const isLandscape = window.innerWidth > window.innerHeight;
+    if (isLandscape) {
+      document.body.classList.add('landscape');
+      document.body.classList.remove('portrait');
+    } else {
+      document.body.classList.add('portrait');
+      document.body.classList.remove('landscape');
+    }
+  };
 
   return (
     <Router>
